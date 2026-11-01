@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Link, NavLink, Outlet, useLocation } from 'react-router';
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router';
 import { useSession } from '../lib/session';
 import { IconDiscover, IconLibrary, IconMessages, IconSettings } from './Icons';
 import { HomeLink } from './Logo';
@@ -24,6 +24,16 @@ export function AppShellWith({ children }: { children: ReactNode }) {
   const { user, signOut } = useSession();
   const { item } = usePlayer();
   const location = useLocation();
+  const navigate = useNavigate();
+  // Top-level tabs have no back button; everything deeper does (installed apps have no browser back).
+  const isTop = ['/', '/discover', '/messages', '/settings'].includes(location.pathname);
+  const goBack = () => (window.history.state?.idx > 0 ? navigate(-1) : navigate('/', { viewTransition: true }));
+  const back = (cls: string) => !isTop && (
+    <button type="button" className={`back-btn ${cls}`} onClick={goBack} aria-label="Back">
+      <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 5-7 7 7 7" /></svg>
+      <span>Back</span>
+    </button>
+  );
   const { projects } = useProjects();
   const { profile } = useMe();
   const me = profile ?? { username: user?.username ?? '', avatar: null, displayName: '' };
@@ -65,13 +75,17 @@ export function AppShellWith({ children }: { children: ReactNode }) {
       </nav>
       <div>
         <header className="mobile-bar">
-          <HomeLink />
+          <span className="mobile-bar-left">
+            {back('mobile-back')}
+            {isTop && <HomeLink />}
+          </span>
           <span className="form-actions">
             <Link to={`/u/${user?.username ?? ''}`} className="mobile-avatar" aria-label="Your profile"><Avatar profile={me} size={32} /></Link>
             <button type="button" className="btn btn-ghost btn-sm" onClick={() => void signOut()}>Sign out</button>
           </span>
         </header>
         <main id="main" className="content" tabIndex={-1} key={location.pathname}>
+          {back('content-back')}
           {children}
         </main>
       </div>

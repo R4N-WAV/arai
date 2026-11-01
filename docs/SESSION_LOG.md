@@ -47,3 +47,7 @@
 
 ## Session 8 — 2026-11-01
 - Owner feedback (mobile screenshot): track menu covered by rows (entrance animations left transforms → stacking contexts; fixed with fill-mode backwards + raised row; phones get a bottom-sheet menu), cluttered buttons (icon+label, labels hidden on phones, one row), cover art as hero on mobile (~78vw), universal playback (providers moved above the router; E2E proves music continues across pages), avatar picture in the shell (`lib/me.tsx`), smooth drag (row follows pointer each frame, midpoint swaps, FLIP neighbours, edge auto-scroll, settle animation), general mobile rhythm.
+
+## Session 9 — 2026-11-02
+- Owner: home-screen app showed Safari bars; no back button on mobile. Added manifest (display standalone), apple-mobile-web-app meta + black-translucent status bar, generated icons (180/192/512 + maskable) from the outlined அ, viewport-fit=cover with safe-area padding, overscroll none; Back button (mobile bar + desktop content) on non-tab routes; creating a project replaces the form in history. E2E covers manifest and back navigation.
+- Note for users: an app added before this deploy must be removed and re-added from the home screen; installed apps keep their own sign-in (separate from Safari).

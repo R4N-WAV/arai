@@ -46,6 +46,12 @@ step('private project created and opened');
 const leaked = sent.filter((b) => b.includes(secretName) || b.includes('Late-night demos'));
 if (leaked.length) throw new Error('private project name/description was sent to the server in plaintext');
 step('name and description never left the browser unencrypted');
+await page.locator('.content-back').click();
+await page.getByRole('link', { name: 'New project' }).first().waitFor();
+if (await page.locator('.content-back').count()) throw new Error('back button shown on a top-level page');
+await page.goForward();
+await page.getByRole('heading', { name: secretName }).waitFor();
+step('back button returns to the library (and is hidden on top-level pages)');
 
 // library lists it, survives a reload (decrypted again from ciphertext)
 await page.locator('.sidebar').getByRole('link', { name: 'Library' }).click();

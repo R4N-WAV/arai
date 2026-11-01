@@ -9,6 +9,8 @@ const user = `e2e_${Date.now().toString(36)}`;
 const pw = 'studio take 42';
 const newPw = 'second take 77';
 const problems = [];
+const manifest = await (await fetch(`${BASE}/manifest.webmanifest`)).json();
+if (manifest.display !== 'standalone' || !manifest.icons.some((i) => i.purpose === 'maskable')) throw new Error('web app manifest is not installable');
 const browser = await chromium.launch();
 const ctx = await browser.newContext({ viewport: { width: 1280, height: 860 } });
 const page = await ctx.newPage();
