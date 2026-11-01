@@ -1,77 +1,103 @@
-# Arai — Design System
+# Arai — Design System: "ambient space"
 
-Direction: a quiet, studio-like workspace. Music is the colour; the chrome is
-calm. Inspired by mixing desks and tape labels, not SaaS dashboards: flat
-surfaces, hairline dividers, one signal accent, monospaced timecodes, the
-waveform as the hero element. No decorative gradients; motion only to
-communicate state, and disabled under `prefers-reduced-motion`.
+Approved by the owner on 2026-11-01. Reference canvas:
+https://claude.ai/artifact/DBvtsi2PmcgZ2cB6pS4Bp7 (Direction, Logo, interactive
+paint demo, Library desktop, Phone empty).
 
-Tokens live in `apps/web/src/styles/tokens.css` as CSS custom properties.
-Every component consumes tokens only — no raw hex values in components.
+## Idea
 
-## Colour (dark default, light theme via `[data-theme=light]` and `prefers-color-scheme`)
+அறை (arai) means room or space in Tamil. An empty Arai is a quiet, near-black
+space with film grain and a faint hand-lettered அ. Every project carries a
+colour from its cover art; as projects arrive, those colours seep into the
+background like paint spreading over a black canvas and slowly drift. Removing
+a project lets its colour fade out. The interface itself stays black and
+off-white: **colour only ever comes from the user's music.**
 
-| Token | Dark | Light | Use |
-|---|---|---|---|
-| `--bg` | `#111110` | `#F6F4EF` | page |
-| `--surface` | `#1A1918` | `#FFFFFF` | panels, cards |
-| `--surface-2` | `#24221F` | `#EDEAE3` | hover, inputs |
-| `--line` | `#34312D` | `#D8D3C8` | hairlines (non-text) |
-| `--text` | `#F2EFE8` | `#1A1918` | primary text (≥ 15:1) |
-| `--text-muted` | `#A8A29A` | `#5E5850` | secondary text (≥ 7:1 dark / ≥ 6:1 light) |
-| `--accent` | `#FF8A4C` | `#B84A12` | "signal" — play, focus, primary action (≥ 4.5:1 vs bg) |
-| `--accent-ink` | `#1A0E06` | `#FFFFFF` | text on accent |
-| `--danger` | `#FF6B6B` | `#B3261E` | destructive |
-| `--ok` | `#5BD69A` | `#1F7A4D` | success |
-| `--focus` | `#FFD166` | `#1D4ED8` | 3 px focus ring, never removed |
+## Rules that keep it from looking generated
 
-Contrast is verified by an automated test (Phase 1) against WCAG 2.2 AA.
-Status is never conveyed by colour alone (icon + text).
+- No glowing dots, neon box-shadows, gradient avatars, gradient "covers",
+  conic rings or emoji.
+- No rows of identical cards. Content sits on the background; thin rules and
+  type create structure. Glass is reserved for the player bar and overlays.
+- No spaced-out uppercase eyebrows. Sentence case; small human asides use the
+  Fraunces italic "voice".
+- Real content over decoration: track lists show cover thumbnails, not
+  coloured markers.
+- Texture is analogue: grain, ink-like displaced edges, slight -3° tilt on
+  the hand-lettered logo.
 
-## Typography
+## Logo
 
-- UI: `"Inter var"` self-hosted (no third-party font CDN), fallback system-ui.
-- Timecodes, versions, sizes: `ui-monospace, "JetBrains Mono", monospace` with tabular numerals.
-- Scale (rem, 16 px base, respects user font size): 0.75 / 0.875 / 1 / 1.125 / 1.375 / 1.75 / 2.25.
-- Line-height 1.5 body, 1.2 headings. Max line length 70ch.
+- Primary: **அறை**, hand-lettered, tilted -3°. No icon, no Latin name beside it.
+- Square mark: **அ** alone (favicon, app icon, avatars for the product).
+- Latin caption "arai, a space for music" only where Tamil may not be read
+  (emails, link previews), separated by a thin rule.
+- Source: outlined from the Kavivanar typeface (SIL OFL 1.1) by
+  `scripts/build-logo.mjs` (HarfBuzz shaping, so the vowel sign ை sits
+  correctly) into `apps/web/src/components/logoPaths.ts` and
+  `apps/web/public/favicon.svg`. The logo never depends on a web font.
+  A custom redraw by a Tamil letterer can replace the paths later.
+- Accessible name: "Arai".
 
-## Spacing, radius, elevation
+## Colour (`apps/web/src/styles/tokens.css`)
 
-- 4 px grid: `--s-1:4px … --s-8:48px`.
-- Radius: `--r-sm:4px` (inputs), `--r-md:8px` (cards), `--r-pill:999px` (chips, play button).
-- Elevation by surface tone, not shadows; a single `--shadow-pop` for menus/modals.
+| Token | Value | Use |
+|---|---|---|
+| `--void` | `#08080A` | the space |
+| `--text` | `#F2EFEA` | primary text, primary button fill |
+| `--text-2` | `#D2CED6` | secondary text, voice |
+| `--muted` | `#B9B5BE` | supporting text (≈10:1 on void) |
+| `--faint` | `#8E8A93` | disabled (≈5.9:1) |
+| `--line` / `--line-strong` | white 10% / 22% | rules, borders |
+| `--glass` | `rgb(16 15 19 / .72)` + blur | player, overlays only |
+| `--danger` / `--ok` | `#FF8A7A` / `#8FD9AE` | state text, always with words |
+
+Dark by design (no light theme). Project glows: `ambientPalette()` in
+`@arai/shared` — saturation ≤ 62 %, lightness 42–49 %, near-identical hues
+merged, at most 5 glows; rendered with screen blending (tests in
+`packages/shared/test/ambient.test.ts`).
+
+## Type (self-hosted via @fontsource, CSP `font-src 'self'`)
+
+| Role | Face |
+|---|---|
+| Display (titles, project names) | Bricolage Grotesque Variable, 600, tight tracking |
+| Interface & reading | Inter Variable |
+| Voice (asides, empty states) | Fraunces Variable italic 300 |
+| Timecodes, versions, keys | JetBrains Mono Variable, tabular |
+
+## Motion
+
+- Glows: seep in over 4.5 s, drift over 52–88 s, fade out over 3.5 s.
+- Empty-state அ: opacity "breathes" over 16 s.
+- Only transform/opacity animate (compositor); each glow's SVG filter is
+  rasterised once.
+- `prefers-reduced-motion`: everything still.
+- Future: glows respond gently to playback level (Phase 2 player).
 
 ## Layout
 
-- **Desktop ≥ 1024 px**: left sidebar (library, folders, messages, discover),
-  main content, optional right context panel (comments/versions/details),
-  persistent bottom player bar (72 px).
-- **Tablet 640–1023 px**: collapsible sidebar (overlay), context panel as sheet.
-- **Mobile < 640 px**: bottom tab bar (Library, Discover, Upload, Messages,
-  Profile), mini-player above tabs expanding to full-screen player sheet,
-  context content as bottom sheets. Hit targets ≥ 44×44 px. No horizontal scroll at 320 px.
+- Desktop ≥ 1024 px: transparent sidebar (logotype, nav, user) over the space;
+  content column ≤ 1040 px; player bar (glass) at the bottom once built.
+- Mobile: logotype header, content, solid bottom tab bar with a top rule;
+  rows wrap so actions drop below text. No horizontal scroll at 320 px.
+- Hit targets ≥ 44 px.
 
-## Components (built in Phase 1–2, each with keyboard + screen-reader spec)
+## Components (in `apps/web/src`)
 
-Button (primary/secondary/ghost/danger, loading state) · IconButton (requires
-`aria-label`) · TextField / PasswordField (show/hide, strength hints, paste
-allowed) · Select / Menu (roving tabindex, Esc closes) · Dialog (focus trap,
-returns focus, `aria-modal`) · Sheet (mobile) · Toast (`role=status`,
-pauses on hover/focus, never the only error channel) · Tooltip (on focus and
-hover, dismissible) · Tabs · Card · List row with reorder menu (alternative
-to drag-and-drop: "Move up/down/to…") · Avatar · Badge · Skeleton loader ·
-EmptyState (explains + one action) · ErrorState (cause + recovery action) ·
-Waveform (canvas + `role=slider` with `aria-valuetext` "1:32 of 3:45";
-arrow keys seek 5 s, PageUp/Down 30 s) · Transport (play/pause, prev/next,
-loop, speed, pitch, volume — all labelled) · Comment marker (focusable,
-listed in an equivalent text list).
+`components/Logo.tsx` (Wordmark, Mark, HomeLink) · `components/Ambient.tsx`
+(AmbientProvider, `useAmbient().setSources(hexes)`) · `components/Field.tsx` ·
+`components/Unavailable.tsx` (provider-gated features: muted, italic "not
+available yet", dashed disabled button) · buttons `.btn` / `.btn-primary`
+(off-white pill) / `.btn-ghost` / `.btn-danger` · `.section` + `.row` lists ·
+`.tag` · `.page-header` (display title + voice aside) · `.empty`.
+
+Dev-only preview of the background with sample colours (not in the production
+build): `npx vite` in `apps/web`, then `/dev/ambient-preview.html?c=e63946,2a9d8f`.
 
 ## Accessibility baseline (WCAG 2.2 AA)
 
-Semantic landmarks, skip link, visible focus (2.4.11/2.4.13), target size
-(2.5.8), dragging alternatives (2.5.7), accessible authentication without
-cognitive tests (3.3.8 — paste & password managers allowed; Turnstile in
-non-interactive mode where possible), consistent help location (3.2.6),
-redundant entry avoided (3.3.7), errors linked with `aria-describedby`,
-reflow at 400% zoom, `prefers-reduced-motion` and `prefers-contrast` respected.
-Automated axe checks run in Playwright for every page.
+Semantic landmarks, skip link, visible 2 px off-white focus ring, contrast
+checked against `--void`, labelled controls, errors via `aria-describedby`,
+dragging alternatives (when drag-and-drop arrives), reduced motion and
+increased contrast respected, decorative layers `aria-hidden`.

@@ -1,6 +1,6 @@
 # Project Status — authoritative checklist
 
-Last updated: 2026-11-01 (session 2). Tests: 47 passing (crypto 14, api 33) + browser E2E auth flow (`apps/web/e2e/auth-flow.mjs`). `[x]` done & tested · `[~]` in progress · `[ ]` not started · `[!]` blocked.
+Last updated: 2026-11-01 (session 2). Tests: 51 passing (crypto 14, shared 4, api 33) + browser E2E auth flow (`apps/web/e2e/auth-flow.mjs`). `[x]` done & tested · `[~]` in progress · `[ ]` not started · `[!]` blocked.
 
 ## Phase 0 — Research & architecture
 - [x] Repository inspected (empty, greenfield)
@@ -29,6 +29,8 @@ Last updated: 2026-11-01 (session 2). Tests: 47 passing (crypto 14, api 33) + br
 - [!] SMS 2FA — blocked: paid SMS provider (deferred by owner)
 - [ ] 2FA recovery codes (only meaningful once a 2FA method exists)
 - [ ] Password change (signed in), username change, email change
+- [x] Visual identity "ambient space" implemented (DESIGN_SYSTEM.md): hand-lettered அறை logo outlined to SVG, self-hosted fonts, ambient background engine (`ambientPalette` + `Ambient.tsx`), all screens restyled; E2E green
+- [x] Logo click / reload keeps the tab unlocked (`tabvault.ts`)
 - [ ] ESLint; axe accessibility checks in E2E; lazy-load crypto (main bundle 905 kB / 304 kB gz)
 - [ ] Account export & deletion
 

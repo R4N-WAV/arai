@@ -117,3 +117,4 @@ export interface VaultBlobs {
   slot: 'password-username' | 'password-email';
   encPrivateKeys: string;
 }
+export * from './ambient';

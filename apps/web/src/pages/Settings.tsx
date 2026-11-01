@@ -50,20 +50,28 @@ export function Settings() {
 
   return (
     <>
-      <h1>Settings</h1>
+      <header className="page-header">
+        <h1>Settings</h1>
+        <span className="voice">for {user?.username}</span>
+      </header>
       {error && <Notice kind="error">{error}</Notice>}
       {status && <Notice kind="ok">{status}</Notice>}
 
-      <section className="card" aria-labelledby="acct">
+      <section className="section" aria-labelledby="acct">
         <h2 id="acct">Account</h2>
         <div className="row">
-          <div><strong>Username</strong><div className="muted">@{user?.username}</div></div>
+          <div className="row-main">
+            <div className="row-title">Username</div>
+            <p className="row-sub">{user?.username}</p>
+          </div>
         </div>
         <div className="row">
-          <div>
-            <strong>Email</strong>{' '}
-            {user?.emailVerified ? <span className="badge badge-ok">Verified</span> : <span className="badge">Unverified</span>}
-            <div className="muted">{user?.email}</div>
+          <div className="row-main">
+            <div className="row-title">
+              Email
+              {user?.emailVerified ? <span className="tag tag-ok">Verified</span> : <span className="tag">Unverified</span>}
+            </div>
+            <p className="row-sub">{user?.email}</p>
           </div>
         </div>
         {!caps.emailDelivery && !user?.emailVerified && (
@@ -71,33 +79,31 @@ export function Settings() {
         )}
       </section>
 
-      <section className="card" aria-labelledby="mfa">
+      <section className="section" aria-labelledby="mfa">
         <h2 id="mfa">Two-factor authentication</h2>
-        <p className="muted">Adds a one-time code at sign-in. Optional.</p>
+        <p className="section-lede">Adds a one-time code when you sign in. Optional.</p>
         {!caps.emailDelivery && <Unavailable title="Email code" reason={EMAIL_REASON} action="Turn on" />}
         {!caps.sms && <Unavailable title="Text message (SMS) code" reason={SMS_REASON} action="Turn on" />}
       </section>
 
-      <section className="card" aria-labelledby="enc">
+      <section className="section" aria-labelledby="enc">
         <h2 id="enc">Encryption</h2>
         <div className="row">
-          <div>
-            <strong>Your key fingerprint</strong>
-            <div className="muted" style={{ fontSize: 'var(--fs-sm)' }}>Collaborators can compare this to confirm they are sharing with the real you.</div>
-            <div className="mono" style={{ marginTop: 'var(--s-1)' }}>{fp ?? '…'}</div>
+          <div className="row-main">
+            <div className="row-title">Your key fingerprint</div>
+            <p className="row-sub">Collaborators can compare this to confirm they are sharing with the real you.</p>
+            <div className="fingerprint">{fp ?? '…'}</div>
           </div>
         </div>
         <div className="row">
-          <div>
-            <strong>Recovery key</strong>
-            <div className="muted" style={{ fontSize: 'var(--fs-sm)' }}>
-              Shown once when you signed up. It is the only way to reset your password without losing encrypted content.
-            </div>
+          <div className="row-main">
+            <div className="row-title">Recovery key</div>
+            <p className="row-sub">Shown once when you signed up. It is the only way to reset your password without losing encrypted content.</p>
           </div>
         </div>
       </section>
 
-      <section className="card" aria-labelledby="sess">
+      <section className="section" aria-labelledby="sess">
         <h2 id="sess">Signed-in devices</h2>
         {sessions === null ? (
           <p className="muted">Loading…</p>
@@ -105,11 +111,14 @@ export function Settings() {
           <ul className="list">
             {sessions.map((s) => (
               <li key={s.id} className="row">
-                <div>
-                  <strong>{s.device ?? 'Unknown device'}</strong> {s.current && <span className="badge badge-ok">This device</span>}
-                  <div className="muted" style={{ fontSize: 'var(--fs-sm)' }}>Last active {fmt(s.lastSeenAt)} · signed in {fmt(s.createdAt)}</div>
+                <div className="row-main">
+                  <div className="row-title">
+                    {s.device ?? 'Unknown device'}
+                    {s.current && <span className="tag tag-ok">This device</span>}
+                  </div>
+                  <p className="row-sub">Last active {fmt(s.lastSeenAt)} · signed in {fmt(s.createdAt)}</p>
                 </div>
-                <button type="button" className="btn btn-danger" onClick={() => void revoke(s.id, s.current)}>
+                <button type="button" className="btn btn-danger btn-sm" onClick={() => void revoke(s.id, s.current)}>
                   Sign out<span className="visually-hidden"> {s.device ?? 'device'}</span>
                 </button>
               </li>
@@ -117,13 +126,13 @@ export function Settings() {
           </ul>
         )}
         {sessions && sessions.length > 1 && (
-          <p style={{ marginTop: 'var(--s-3)' }}>
-            <button type="button" className="btn" onClick={() => void revokeOthers()}>Sign out all other devices</button>
+          <p style={{ marginTop: 'var(--s-4)' }}>
+            <button type="button" className="btn btn-sm" onClick={() => void revokeOthers()}>Sign out all other devices</button>
           </p>
         )}
       </section>
 
-      <section className="card" aria-labelledby="hist">
+      <section className="section" aria-labelledby="hist">
         <h2 id="hist">Recent sign-ins</h2>
         {events === null ? (
           <p className="muted">Loading…</p>
@@ -133,9 +142,12 @@ export function Settings() {
           <ul className="list">
             {events.map((e, i) => (
               <li key={i} className="row">
-                <div>
-                  <strong>{e.success ? 'Signed in' : 'Failed attempt'}</strong> {e.newDevice && <span className="badge">New device</span>}
-                  <div className="muted" style={{ fontSize: 'var(--fs-sm)' }}>{e.device ?? 'Unknown device'} · {fmt(e.at)}</div>
+                <div className="row-main">
+                  <div className="row-title">
+                    {e.success ? 'Signed in' : 'Failed attempt'}
+                    {e.newDevice && <span className="tag">New device</span>}
+                  </div>
+                  <p className="row-sub">{e.device ?? 'Unknown device'} · {fmt(e.at)}</p>
                 </div>
               </li>
             ))}

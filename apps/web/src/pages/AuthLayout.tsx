@@ -1,13 +1,13 @@
 import type { ReactNode } from 'react';
-import { Link } from 'react-router';
-import { Logo } from '../components/Icons';
+import { HomeLink } from '../components/Logo';
 
-export function AuthLayout({ title, children }: { title: string; children: ReactNode }) {
+export function AuthLayout({ title, lede, children }: { title: string; lede?: string; children: ReactNode }) {
   return (
     <main className="auth">
       <div className="auth-panel">
-        <Link className="brand" to="/"><Logo /> Arai</Link>
+        <HomeLink />
         <h1>{title}</h1>
+        {lede && <p className="voice auth-lede">{lede}</p>}
         {children}
       </div>
     </main>
@@ -16,7 +16,7 @@ export function AuthLayout({ title, children }: { title: string; children: React
 
 export function Busy({ label }: { label: string }) {
   return (
-    <span style={{ display: 'inline-flex', gap: 8, alignItems: 'center' }} role="status">
+    <span style={{ display: 'inline-flex', gap: 10, alignItems: 'center' }} role="status">
       <span className="spinner" aria-hidden="true" /> {label}
     </span>
   );

@@ -1,6 +1,7 @@
 import { StrictMode, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router';
+import { AmbientProvider } from './components/Ambient';
 import { AppShell } from './components/AppShell';
 import { SessionProvider, useSession } from './lib/session';
 import { Library, NotBuilt } from './pages/Library';
@@ -13,7 +14,7 @@ import './styles/app.css';
 
 function RequireAuth({ children }: { children: ReactNode }) {
   const { loading, user, keys } = useSession();
-  if (loading) return <p className="auth" role="status">Loading…</p>;
+  if (loading) return <p className="loading" role="status">Loading…</p>;
   if (!user) return <Navigate to="/signin" replace />;
   if (!keys) return <Unlock />;
   return <>{children}</>;
@@ -21,12 +22,13 @@ function RequireAuth({ children }: { children: ReactNode }) {
 
 function GuestOnly({ children }: { children: ReactNode }) {
   const { loading, user } = useSession();
-  if (loading) return <p className="auth" role="status">Loading…</p>;
+  if (loading) return <p className="loading" role="status">Loading…</p>;
   return user ? <Navigate to="/" replace /> : <>{children}</>;
 }
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
+    <AmbientProvider>
     <SessionProvider>
       <BrowserRouter>
         <Routes>
@@ -43,5 +45,6 @@ createRoot(document.getElementById('root')!).render(
         </Routes>
       </BrowserRouter>
     </SessionProvider>
+    </AmbientProvider>
   </StrictMode>,
 );

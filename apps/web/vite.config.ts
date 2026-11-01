@@ -7,5 +7,6 @@ export default defineConfig({
   plugins: [react()],
   server: { proxy: { '/api': { target: 'http://localhost:8787', changeOrigin: false } } },
   worker: { format: 'es' },
-  build: { target: 'es2022', sourcemap: false },
+  // No data: URIs: the CSP only allows same-origin fonts and images.
+  build: { target: 'es2022', sourcemap: false, assetsInlineLimit: 0 },
 });

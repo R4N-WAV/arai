@@ -1,37 +1,35 @@
-/* Arai design tokens — see docs/DESIGN_SYSTEM.md. Components use tokens only. */
+/*
+ * Arai design tokens: "ambient space". See docs/DESIGN_SYSTEM.md.
+ * The interface is near-black and off-white; colour only ever comes from the
+ * user's projects (see components/Ambient.tsx). Dark by design.
+ */
 :root {
-  --bg: #111110;
-  --surface: #1a1918;
-  --surface-2: #24221f;
-  --line: #34312d;
-  --text: #f2efe8;
-  --text-muted: #a8a29a;
-  --accent: #ff8a4c;
-  --accent-ink: #1a0e06;
-  --danger: #ff6b6b;
-  --ok: #5bd69a;
-  --focus: #ffd166;
-  --disabled-text: #7d776f;
+  --void: #08080a;
+  --void-2: #0f0f12;
+  --text: #f2efea;
+  --text-2: #d2ced6;
+  --muted: #b9b5be;
+  --faint: #8e8a93;
+  --line: rgb(255 255 255 / 0.10);
+  --line-strong: rgb(255 255 255 / 0.22);
+  --field: rgb(255 255 255 / 0.035);
+  --field-hover: rgb(255 255 255 / 0.06);
+  --glass: rgb(16 15 19 / 0.72);
+  --danger: #ff8a7a;
+  --ok: #8fd9ae;
+  --focus: #f2efea;
 
-  --font-ui: "Inter var", Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --font-mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
-  --fs-xs: 0.75rem; --fs-sm: 0.875rem; --fs-md: 1rem; --fs-lg: 1.125rem;
-  --fs-xl: 1.375rem; --fs-2xl: 1.75rem; --fs-3xl: 2.25rem;
+  --font-display: "Bricolage Grotesque Variable", "Inter Variable", system-ui, sans-serif;
+  --font-ui: "Inter Variable", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono Variable", ui-monospace, "SF Mono", Menlo, monospace;
+  --font-voice: "Fraunces Variable", Georgia, serif;
 
-  --s-1: 4px; --s-2: 8px; --s-3: 12px; --s-4: 16px; --s-5: 24px; --s-6: 32px; --s-7: 40px; --s-8: 48px;
-  --r-sm: 4px; --r-md: 8px; --r-pill: 999px;
-  --shadow-pop: 0 8px 32px rgb(0 0 0 / 0.45);
-  --sidebar-w: 248px;
+  --fs-xs: 0.75rem; --fs-sm: 0.875rem; --fs-md: 1rem; --fs-lg: 1.125rem; --fs-xl: 1.375rem;
+  --fs-2xl: 1.75rem; --fs-3xl: 2.375rem; --fs-4xl: 3.75rem;
+  --s-1: 4px; --s-2: 8px; --s-3: 12px; --s-4: 16px; --s-5: 24px; --s-6: 32px; --s-7: 44px; --s-8: 64px;
+  --r-xs: 3px; --r-sm: 10px; --r-md: 16px; --r-pill: 999px;
+  --sidebar-w: 232px;
   --tabbar-h: 64px;
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
   color-scheme: dark;
-}
-
-@media (prefers-color-scheme: light) {
-  :root:not([data-theme="dark"]) {
-    --bg: #f6f4ef; --surface: #ffffff; --surface-2: #edeae3; --line: #d8d3c8;
-    --text: #1a1918; --text-muted: #5e5850; --accent: #b84a12; --accent-ink: #ffffff;
-    --danger: #b3261e; --ok: #1f7a4d; --focus: #1d4ed8; --disabled-text: #77716a;
-    --shadow-pop: 0 8px 32px rgb(0 0 0 / 0.12);
-    color-scheme: light;
-  }
 }

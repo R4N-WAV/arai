@@ -31,7 +31,7 @@ export function SignIn() {
   }
 
   return (
-    <AuthLayout title="Sign in">
+    <AuthLayout title="Sign in" lede="Welcome back to your space.">
       {error && <Notice kind="error">{error}</Notice>}
       <form onSubmit={onSubmit} noValidate>
         <Field label="Username" hint="Signing in with your email address becomes available once email verification is set up." autoComplete="username" value={identifier} onChange={(e) => setIdentifier(e.target.value)} required />
@@ -40,10 +40,10 @@ export function SignIn() {
           {busy ? <Busy label="Unlocking your keys…" /> : 'Sign in'}
         </button>
       </form>
-      <p style={{ marginTop: 'var(--s-5)' }}>
+      <p className="auth-alt">
         <Link to="/recover">Forgot your password?</Link>
       </p>
-      <p className="muted">
+      <p className="auth-alt" style={{ marginTop: 0 }}>
         New to Arai? <Link to="/register">Create an account</Link>
       </p>
     </AuthLayout>

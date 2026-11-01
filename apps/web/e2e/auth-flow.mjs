@@ -48,11 +48,11 @@ for (const name of ['Send verification email', 'Turn on']) {
   for (const b of await page.getByRole('button', { name }).all()) if (!(await b.isDisabled())) throw new Error(`${name} should be disabled`);
 }
 if ((await page.getByText('Not available yet').count()) < 3) throw new Error('expected greyed-out provider features');
-await page.locator('.mono').filter({ hasText: /^[0-9a-f]{4} / }).waitFor();
+await page.locator('.fingerprint').filter({ hasText: /^[0-9a-f]{4} / }).waitFor();
 step('settings: email verification + email/SMS 2FA greyed out; fingerprint shown');
 await shot('03-settings');
 
-await page.locator('.sidebar .brand').click();
+await page.locator('.sidebar .home-link').click();
 await page.getByRole('heading', { name: 'Library' }).waitFor();
 if (await page.getByRole('heading', { name: 'Unlock Arai' }).count()) throw new Error('logo click locked the vault');
 step('logo click navigates without locking');

@@ -75,22 +75,22 @@ export function Register() {
 
   if (prepared) {
     return (
-      <AuthLayout title="Save your recovery key">
+      <AuthLayout title="Save your recovery key" lede="One key, kept by you alone.">
         {error && <Notice kind="error">{error}</Notice>}
         <p>
           Your music and messages are encrypted with keys only you hold. If you forget your password, this recovery key is the
           <strong> only</strong> way to get your encrypted content back. Arai cannot recover it for you.
         </p>
         <p className="recovery-code" aria-label="Recovery key">{prepared.recoveryCode}</p>
-        <p>
-          <button type="button" className="btn" onClick={() => void navigator.clipboard?.writeText(prepared.recoveryCode)}>Copy recovery key</button>
+        <p style={{ marginBottom: 'var(--s-6)' }}>
+          <button type="button" className="btn btn-sm" onClick={() => void navigator.clipboard?.writeText(prepared.recoveryCode)}>Copy recovery key</button>
         </p>
         <form onSubmit={onCreate}>
           <label className="checkbox">
             <input type="checkbox" checked={saved} onChange={(e) => setSaved(e.target.checked)} />
             <span>I have stored this recovery key somewhere safe, such as a password manager.</span>
           </label>
-          <label className="checkbox">
+          <label className="checkbox" style={{ borderBottom: '1px solid var(--line)', marginBottom: 'var(--s-5)' }}>
             <input type="checkbox" checked={understood} onChange={(e) => setUnderstood(e.target.checked)} />
             <span>I understand that if I lose both my password and this key, my encrypted projects and messages are gone for good.</span>
           </label>
@@ -103,7 +103,7 @@ export function Register() {
   }
 
   return (
-    <AuthLayout title="Create your account">
+    <AuthLayout title="Create your space" lede="A private place for your music, and the people you make it with.">
       {error && <Notice kind="error">{error}</Notice>}
       <form onSubmit={onDetails} noValidate>
         <Field label="Username" hint="Public. 3–30 letters, numbers, dots or underscores." autoComplete="username" value={username} onChange={(e) => setUsername(e.target.value)} error={usernameError} required />
@@ -117,7 +117,7 @@ export function Register() {
           {busy ? <Busy label="Generating your encryption keys…" /> : 'Continue'}
         </button>
       </form>
-      <p className="muted" style={{ marginTop: 'var(--s-5)' }}>
+      <p className="auth-alt">
         Already have an account? <Link to="/signin">Sign in</Link>
       </p>
     </AuthLayout>

@@ -28,8 +28,8 @@ export function Unlock() {
   }
 
   return (
-    <AuthLayout title="Unlock Arai">
-      <p className="muted">Signed in as @{user?.username}. Your encryption keys are kept only in memory, so enter your password to unlock them on this page.</p>
+    <AuthLayout title="Unlock Arai" lede={`Signed in as ${user?.username ?? ''}.`}>
+      <p className="muted" style={{ fontSize: 'var(--fs-sm)', marginBottom: 'var(--s-5)' }}>Your encryption keys never leave this browser unprotected. In a new tab, enter your password once to unlock them.</p>
       {error && <Notice kind="error">{error}</Notice>}
       <form onSubmit={onSubmit}>
         <input type="hidden" autoComplete="username" value={user?.username ?? ''} readOnly />
@@ -38,8 +38,8 @@ export function Unlock() {
           {busy ? <Busy label="Unlocking…" /> : 'Unlock'}
         </button>
       </form>
-      <p style={{ marginTop: 'var(--s-4)' }}>
-        <button type="button" className="btn btn-ghost" onClick={() => void signOut()}>Sign out</button>
+      <p className="auth-alt">
+        <button type="button" className="btn btn-ghost btn-sm" onClick={() => void signOut()}>Sign out</button>
       </p>
     </AuthLayout>
   );

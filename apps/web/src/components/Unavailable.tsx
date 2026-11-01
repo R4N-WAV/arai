@@ -1,21 +1,22 @@
 import type { ReactNode } from 'react';
 
 /**
- * A feature that depends on an external provider (email delivery, SMS) that
- * is not configured yet. Rendered greyed out with an explanation; the control
- * is disabled and never pretends to work. Swap for the real control once the
- * capability flag turns on.
+ * A feature that needs an external provider (email delivery, SMS) that is not
+ * configured yet: shown muted with an explanation and a disabled control.
+ * It never pretends to work. Swap for the real control once the capability
+ * flag turns on.
  */
 export function Unavailable({ title, reason, action }: { title: string; reason: string; action: string }) {
   return (
     <div className="row unavailable">
-      <div>
-        <div className="unavailable-title">
-          <strong>{title}</strong> <span className="badge">Not available yet</span>
+      <div className="row-main">
+        <div className="row-title">
+          {title}
+          <span className="not-yet">not available yet</span>
         </div>
-        <p className="muted" style={{ margin: 0, fontSize: 'var(--fs-sm)' }}>{reason}</p>
+        <p className="row-sub">{reason}</p>
       </div>
-      <button type="button" className="btn" disabled aria-disabled="true">
+      <button type="button" className="btn btn-sm" disabled>
         {action}
       </button>
     </div>

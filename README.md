@@ -90,3 +90,7 @@ until providers are configured.
 ## Licence
 
 To be decided by the owner before public release.
+
+Third-party design assets: the logo is outlined from the Kavivanar typeface,
+and the interface uses Bricolage Grotesque, Inter, Fraunces and JetBrains Mono
+— all under the SIL Open Font License 1.1 (self-hosted via @fontsource).
