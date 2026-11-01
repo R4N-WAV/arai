@@ -1,4 +1,5 @@
 import { CURRENT_KDF, loginRequest, preloginRequest, recoverChallengeRequest, recoverRequest, registerRequest, type Capabilities } from '@arai/shared';
+import { reindexProfile } from './social.js';
 import { Hono, type Context } from 'hono';
 import type { AppBindings, Env } from '../env.js';
 import { appendAudit } from '../lib/audit.js';
@@ -130,6 +131,7 @@ auth.post('/auth/register', async (c) => {
   await c.env.DB.prepare('INSERT INTO login_events (id, user_id, at, success, ip_hmac, ua_summary, reason) VALUES (?, ?, ?, 1, ?, ?, ?)')
     .bind(randomId(), userId, now, ip, uaSummary(c), 'registered')
     .run();
+  await reindexProfile(c.env.DB, userId);
   await createSession(c, userId);
   return c.json({ ok: true }, 201);
 });

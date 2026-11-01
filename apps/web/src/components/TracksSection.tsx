@@ -9,6 +9,8 @@ import { Menu } from './Menu';
 import { Modal } from './Modal';
 import { Notice } from './Unavailable';
 import { Waveform } from './Waveform';
+import { VersionComments } from './Comments';
+import { syncShares } from '../lib/collab';
 
 const ACCEPT = 'audio/*,.wav,.aif,.aiff,.flac,.mp3,.m4a,.ogg';
 const day = (t: number) => new Date(t).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
@@ -52,7 +54,7 @@ function TrackRow(props: {
   canEdit: boolean;
   canAdmin: boolean;
   onToggle: () => void;
-  onPlay: (v?: TrackVersion) => void;
+  onPlay: (v?: TrackVersion, startAt?: number) => void;
   onMakeCurrent: (v: TrackVersion) => void;
   onNewVersion: () => void;
   onDelete: () => void;
@@ -123,7 +125,19 @@ function TrackRow(props: {
       <div className={`versions-wrap${open ? ' open' : ''}`}>
         {open && (
           <div className="versions">
-            {wave && <Waveform data={wave} current={active ? player.time : 0} duration={active ? player.duration : 0} onSeek={active ? player.seek : undefined} className="waveform waveform-detail" label={`Waveform of ${t.title}`} />}
+            {t.current && (
+              <VersionComments
+                project={props.project}
+                version={t.current}
+                wave={wave}
+                active={active && player.item?.version.id === t.current.id}
+                time={player.time}
+                duration={player.duration}
+                onSeek={player.seek}
+                onJump={(at) => (active && player.item?.version.id === t.current!.id ? player.seek(at) : props.onPlay(t.current!, at))}
+                title={t.title}
+              />
+            )}
             <ul className="list">
               {[...t.versions].reverse().map((v) => (
                 <li key={v.id} className="version">
@@ -184,6 +198,17 @@ export function TracksSection({ project, addOpen, setAddOpen, onTracks }: { proj
   useEffect(() => {
     if (tracks) onTracks(tracks);
   }, [tracks, onTracks]);
+  // Keep share links (and public listening) in step with the tracks.
+  const shareSig = useRef<string | null>(null);
+  useEffect(() => {
+    if (!tracks || project.role === 'listener') return;
+    const sig = tracks.map((t) => `${t.id}:${t.current?.id}:${t.title}`).join('|');
+    const prev = shareSig.current;
+    shareSig.current = sig;
+    if (prev === null || prev === sig) return;
+    const h = setTimeout(() => void syncShares(project, tracks).catch(() => undefined), 600);
+    return () => clearTimeout(h);
+  }, [tracks, project]);
   const canEdit = project.role !== 'listener';
   const canAdmin = project.role === 'admin' || project.role === 'owner';
 
@@ -216,9 +241,9 @@ export function TracksSection({ project, addOpen, setAddOpen, onTracks }: { proj
     if (canEdit) addFiles(e.dataTransfer.files);
   };
 
-  const play = (track: Track, version?: TrackVersion) => {
+  const play = (track: Track, version?: TrackVersion, startAt?: number) => {
     const list = (tracks ?? []).filter((t) => t.current);
-    const items = list.map((t) => ({ project, track: t, version: t.id === track.id && version ? version : t.current! }));
+    const items = list.map((t) => ({ project, track: t, version: t.id === track.id && version ? version : t.current!, ...(t.id === track.id && startAt ? { startAt } : {}) }));
     player.playQueue(items, Math.max(0, list.findIndex((t) => t.id === track.id)));
   };
 
@@ -399,7 +424,7 @@ export function TracksSection({ project, addOpen, setAddOpen, onTracks }: { proj
               canEdit={canEdit}
               canAdmin={canAdmin}
               onToggle={() => setOpen(open === t.id ? null : t.id)}
-              onPlay={(v) => play(t, v)}
+              onPlay={(v, at) => play(t, v, at)}
               onMakeCurrent={async (v) => {
                 try {
                   await makeCurrent(project, t, v.id);

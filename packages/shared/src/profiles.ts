@@ -31,6 +31,8 @@ export interface PublicProjectDto {
   id: string;
   publicMeta: PublicMeta;
   publishedAt: number;
+  /** Has a public listening link (audio playable by anyone). */
+  listenable?: boolean;
 }
 
 export interface ProfileDto {

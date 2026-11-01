@@ -20,7 +20,7 @@ import {
 import { MAX_FILE_BYTES, type TrackDto, type TrackVersionDto } from '@arai/shared';
 import { api, ApiError } from './api';
 import { analyse, sniff, type AudioFormat } from './audio';
-import { newProjectId as newId, projectKey, type Project } from './projects';
+import { keyFor, newProjectId as newId, projectKey, type Project } from './projects';
 
 export interface VersionMeta {
   fileName: string;
@@ -41,6 +41,7 @@ export interface VersionMeta {
 export interface TrackVersion {
   id: string;
   number: number;
+  createdBy: string;
   createdAt: number;
   meta: VersionMeta | null;
   file: TrackVersionDto['file'];
@@ -65,9 +66,11 @@ function needKey(project: Project): Uint8Array {
   return k;
 }
 
-async function decodeTrack(dto: TrackDto, key: Uint8Array): Promise<Track> {
+async function decodeTrack(dto: TrackDto, projectId: string): Promise<Track> {
   let title = 'Untitled track';
   try {
+    const key = keyFor(projectId, dto.keyVersion);
+    if (!key) throw new Error('locked');
     const m = await openJson<{ title?: unknown }>(key, await fromBase64Url(dto.encMeta), trackCtx(dto.id));
     if (typeof m.title === 'string') title = m.title.slice(0, 200);
   } catch {
@@ -77,32 +80,40 @@ async function decodeTrack(dto: TrackDto, key: Uint8Array): Promise<Track> {
     dto.versions.map(async (v): Promise<TrackVersion> => {
       let meta: VersionMeta | null = null;
       try {
-        meta = await openJson<VersionMeta>(key, await fromBase64Url(v.encMeta), versionCtx(v.id));
+        const key = keyFor(projectId, v.keyVersion);
+        if (key) meta = await openJson<VersionMeta>(key, await fromBase64Url(v.encMeta), versionCtx(v.id));
       } catch {
         meta = null;
       }
-      return { id: v.id, number: v.number, createdAt: v.createdAt, meta, file: v.file };
+      return { id: v.id, number: v.number, createdBy: v.createdBy, createdAt: v.createdAt, meta, file: v.file };
     }),
   );
   return { id: dto.id, title, position: dto.position, currentVersionId: dto.currentVersionId, versions, current: versions.find((v) => v.id === dto.currentVersionId) ?? versions.at(-1) ?? null };
 }
 
+/** The decrypted per-file key of a version (wrapped by the key version current at upload). */
+export async function fileKeyOf(project: { id: string }, v: TrackVersion): Promise<Uint8Array> {
+  const key = keyFor(project.id, v.file.keyVersion);
+  if (!key) throw new Error('locked');
+  return open(key, await fromBase64Url(v.file.encFileKey), fileKeyCtx(v.file.id));
+}
+
 export async function loadTracks(project: Project): Promise<Track[]> {
-  const key = needKey(project);
+  needKey(project);
   const { tracks } = await api<{ tracks: TrackDto[] }>('GET', `/projects/${project.id}/tracks`);
-  return Promise.all(tracks.map((t) => decodeTrack(t, key)));
+  return Promise.all(tracks.map((t) => decodeTrack(t, project.id)));
 }
 
 export async function renameTrack(project: Project, track: Track, title: string): Promise<Track> {
   const key = needKey(project);
   const encMeta = await toBase64Url(await sealJson(key, { title }, trackCtx(track.id)));
-  const { track: t } = await api<{ track: TrackDto }>('PATCH', `/tracks/${track.id}`, { encMeta });
-  return decodeTrack(t, key);
+  const { track: t } = await api<{ track: TrackDto }>('PATCH', `/tracks/${track.id}`, { encMeta, keyVersion: project.keyVersion });
+  return decodeTrack(t, project.id);
 }
 
 export async function makeCurrent(project: Project, track: Track, versionId: string): Promise<Track> {
   const { track: t } = await api<{ track: TrackDto }>('PATCH', `/tracks/${track.id}`, { currentVersionId: versionId });
-  return decodeTrack(t, needKey(project));
+  return decodeTrack(t, project.id);
 }
 
 export async function deleteTrack(track: Track): Promise<void> {
@@ -243,7 +254,7 @@ export class UploadJob {
       const encMeta = await toBase64Url(await sealJson(key, this.meta, versionCtx(versionId)));
       let dto: TrackDto;
       if (this.existingTrack) {
-        dto = (await api<{ track: TrackDto }>('POST', `/tracks/${this.existingTrack.id}/versions`, { id: versionId, fileId, encMeta })).track;
+        dto = (await api<{ track: TrackDto }>('POST', `/tracks/${this.existingTrack.id}/versions`, { id: versionId, fileId, encMeta, keyVersion: this.project.keyVersion })).track;
       } else {
         const trackId = newId();
         const title = (this.title ?? this.file.name.replace(/\.[^.]+$/, '')).slice(0, 200) || 'Untitled track';
@@ -251,11 +262,12 @@ export class UploadJob {
           await api<{ track: TrackDto }>('POST', `/projects/${this.project.id}/tracks`, {
             id: trackId,
             encMeta: await toBase64Url(await sealJson(key, { title }, trackCtx(trackId))),
-            version: { id: versionId, fileId, encMeta },
+            keyVersion: this.project.keyVersion,
+            version: { id: versionId, fileId, encMeta, keyVersion: this.project.keyVersion },
           })
         ).track;
       }
-      this.trackDone = await decodeTrack(dto, key);
+      this.trackDone = await decodeTrack(dto, this.project.id);
       this.progress = 1;
       this.set('done');
       return this.trackDone;
@@ -277,6 +289,7 @@ export const UPLOAD_ERRORS: Record<string, string> = {
   network_error: 'The connection dropped. Retry to continue where it stopped.',
   forbidden: 'You do not have permission to upload to this project.',
   locked: 'This project is locked in this browser.',
+  stale_key: 'The project’s key just changed (someone left). Reload the page and try again.',
 };
 
 // ---------------------------------------------------------------- playback
@@ -287,8 +300,7 @@ const urlCache = new Map<string, string>();
 export async function audioUrl(project: Project, v: TrackVersion, onProgress?: (p: number) => void): Promise<string> {
   const cached = urlCache.get(v.id);
   if (cached) return cached;
-  const key = needKey(project);
-  const fileKey = await open(key, await fromBase64Url(v.file.encFileKey), fileKeyCtx(v.file.id));
+  const fileKey = await fileKeyOf(project, v);
   const n = v.file.chunkCount;
   const parts: Uint8Array[] = new Array(n);
   let done = 0;

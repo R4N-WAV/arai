@@ -33,17 +33,20 @@ export const createFileRequest = z
   })
   .refine((v) => validChunkLayout(v.encSize, v.chunkCount), 'invalid_layout');
 
-const versionInput = z.object({ id: entityId, fileId: entityId, encMeta });
-export const createTrackRequest = z.object({ id: entityId, encMeta, version: versionInput });
+const keyVersion = z.number().int().positive();
+const versionInput = z.object({ id: entityId, fileId: entityId, encMeta, keyVersion });
+export const createTrackRequest = z.object({ id: entityId, encMeta, keyVersion, version: versionInput });
 export const addVersionRequest = versionInput;
 export const updateTrackRequest = z
-  .object({ encMeta: encMeta.optional(), currentVersionId: entityId.optional(), position: z.number().finite().optional() })
+  .object({ encMeta: encMeta.optional(), keyVersion: keyVersion.optional(), currentVersionId: entityId.optional(), position: z.number().finite().optional() })
+  .refine((v) => (v.encMeta === undefined) === (v.keyVersion === undefined), 'key_version_required')
   .refine((v) => v.encMeta !== undefined || v.currentVersionId !== undefined || v.position !== undefined, 'empty_update');
 
 export interface TrackVersionDto {
   id: string;
   number: number;
   encMeta: string;
+  keyVersion: number;
   createdBy: string;
   createdAt: number;
   file: { id: string; encSize: number; chunkCount: number; encFileKey: string; keyVersion: number };
@@ -51,6 +54,7 @@ export interface TrackVersionDto {
 export interface TrackDto {
   id: string;
   encMeta: string;
+  keyVersion: number;
   position: number;
   currentVersionId: string | null;
   createdAt: number;

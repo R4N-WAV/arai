@@ -13,7 +13,7 @@ import {
   toBase64Url,
   type AccountKeys,
 } from '@arai/crypto';
-import type { ProjectDto, ProjectMeta, PublicMeta, Role } from '@arai/shared';
+import type { MemberDto, ProjectDto, ProjectMeta, PublicMeta, Role } from '@arai/shared';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useAmbient } from '../components/Ambient';
 import { api } from './api';
@@ -28,6 +28,9 @@ export interface Project {
   updatedAt: number;
   /** null when this browser could not open the project key (shown as locked). */
   meta: ProjectMeta | null;
+  rotationDue: boolean;
+  /** Username of whoever invited you, while this is an open invitation. */
+  invitedBy?: string;
 }
 
 const keyCache = new Map<string, Uint8Array>();
@@ -36,6 +39,14 @@ const keyCache = new Map<string, Uint8Array>();
 export function projectKey(p: { id: string; keyVersion: number }): Uint8Array | null {
   return keyCache.get(`${p.id}:${p.keyVersion}`) ?? null;
 }
+/** Any key version from this member's keyring (old content keeps its version). */
+export function keyFor(projectId: string, version: number): Uint8Array | null {
+  return keyCache.get(`${projectId}:${version}`) ?? null;
+}
+export function rememberKey(projectId: string, version: number, key: Uint8Array) {
+  keyCache.set(`${projectId}:${version}`, key);
+}
+export const projectMetaContext = (id: string) => `project/${id}/meta`;
 const metaContext = (id: string) => `project/${id}/meta`;
 
 export function newProjectId(): string {
@@ -59,26 +70,55 @@ function cleanMeta(m: unknown): ProjectMeta | null {
 const publicPart = (m: ProjectMeta): PublicMeta => ({ name: m.name, description: m.description, genre: m.genre, tags: m.tags, color: m.color });
 
 async function decode(dto: ProjectDto, keys: AccountKeys, myId: string): Promise<Project> {
-  const base = { id: dto.id, role: dto.role, visibility: dto.visibility, keyVersion: dto.keyVersion, createdAt: dto.createdAt, updatedAt: dto.updatedAt };
-  try {
-    let key = keyCache.get(`${dto.id}:${dto.keyVersion}`);
-    if (!key) {
-      if (!dto.grant) return { ...base, meta: null };
+  const base = { id: dto.id, role: dto.role, visibility: dto.visibility, keyVersion: dto.keyVersion, createdAt: dto.createdAt, updatedAt: dto.updatedAt, rotationDue: dto.rotationDue, ...(dto.invitedBy ? { invitedBy: dto.invitedBy } : {}) };
+  // Open every key version we hold; each grant's signature is checked first.
+  for (const g of dto.grants) {
+    if (keyCache.has(`${dto.id}:${g.keyVersion}`)) continue;
+    try {
       // Our own grants are verified against the signing key held in this
       // browser, never the copy the server sends back.
-      const granterKey = dto.grant.grantedBy === myId ? keys.sign.publicKey : await fromBase64Url(dto.grant.granterSignKey);
-      key = await openGrant(keys, granterKey, 'project', dto.id, dto.keyVersion, myId, await fromBase64Url(dto.grant.wrappedKey), await fromBase64Url(dto.grant.signature));
-      keyCache.set(`${dto.id}:${dto.keyVersion}`, key);
+      const granterKey = g.grantedBy === myId ? keys.sign.publicKey : await fromBase64Url(g.granterSignKey);
+      const key = await openGrant(keys, granterKey, 'project', dto.id, g.keyVersion, myId, await fromBase64Url(g.wrappedKey), await fromBase64Url(g.signature));
+      keyCache.set(`${dto.id}:${g.keyVersion}`, key);
+    } catch {
+      /* an unverifiable grant is ignored, never used */
     }
-    const meta = cleanMeta(await openJson(key, await fromBase64Url(dto.encMeta), metaContext(dto.id)));
-    return { ...base, meta };
+  }
+  const key = keyCache.get(`${dto.id}:${dto.keyVersion}`);
+  if (!key) return { ...base, meta: null };
+  try {
+    return { ...base, meta: cleanMeta(await openJson(key, await fromBase64Url(dto.encMeta), metaContext(dto.id))) };
   } catch {
     return { ...base, meta: null };
   }
 }
 
+/**
+ * After someone left or was removed, an admin's browser makes a new project
+ * key and grants it to everyone who remains. New content uses it; the person
+ * who left never receives it.
+ */
+async function rotate(p: Project, keys: AccountKeys, myId: string): Promise<void> {
+  if (!p.meta) return;
+  const { members } = await api<{ members: MemberDto[] }>('GET', `/projects/${p.id}/members`);
+  const next = p.keyVersion + 1;
+  const key = await generateKey();
+  const grants = await Promise.all(
+    members.map(async (m) => {
+      const box = m.id === myId ? keys.box.publicKey : await fromBase64Url(m.boxKey);
+      const g = await createGrant(keys, box, 'project', p.id, next, m.id, key);
+      return { userId: m.id, wrappedKey: await toBase64Url(g.wrapped), signature: await toBase64Url(g.signature) };
+    }),
+  );
+  await api('POST', `/projects/${p.id}/rotate`, { keyVersion: next, encMeta: await toBase64Url(await sealJson(key, p.meta, metaContext(p.id))), grants });
+  keyCache.set(`${p.id}:${next}`, key);
+}
+
 interface ProjectsState {
   projects: Project[] | null;
+  invites: Project[];
+  accept: (p: Project) => Promise<void>;
+  decline: (p: Project) => Promise<void>;
   error: string | null;
   refresh: () => Promise<void>;
   create: (meta: ProjectMeta, visibility: 'private' | 'public') => Promise<Project>;
@@ -94,14 +134,26 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
   const { user, keys } = useSession();
   const { setSources } = useAmbient();
   const [projects, setProjects] = useState<Project[] | null>(null);
+  const [invites, setInvites] = useState<Project[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [focused, setFocused] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     if (!user || !keys) return;
     try {
-      const { projects: dtos } = await api<{ projects: ProjectDto[] }>('GET', '/projects');
-      setProjects(await Promise.all(dtos.map((d) => decode(d, keys, user.id))));
+      const [{ projects: dtos }, { invites: inv }] = await Promise.all([
+        api<{ projects: ProjectDto[] }>('GET', '/projects'),
+        api<{ invites: ProjectDto[] }>('GET', '/invites').catch(() => ({ invites: [] as ProjectDto[] })),
+      ]);
+      let list = await Promise.all(dtos.map((d) => decode(d, keys, user.id)));
+      const due = list.filter((p) => p.rotationDue && (p.role === 'admin' || p.role === 'owner') && p.meta);
+      if (due.length) {
+        await Promise.all(due.map((p) => rotate(p, keys, user.id).catch(() => undefined)));
+        const again = await api<{ projects: ProjectDto[] }>('GET', '/projects');
+        list = await Promise.all(again.projects.map((d) => decode(d, keys, user.id)));
+      }
+      setProjects(list);
+      setInvites(await Promise.all(inv.map((d) => decode(d, keys, user.id))));
       setError(null);
     } catch {
       setError('Your projects could not be loaded. Check your connection and try again.');
@@ -121,6 +173,15 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
   const value = useMemo<ProjectsState>(
     () => ({
       projects,
+      invites,
+      accept: async (p) => {
+        await api('POST', `/invites/${p.id}/accept`);
+        await refresh();
+      },
+      decline: async (p) => {
+        await api('DELETE', `/projects/${p.id}/members/me`);
+        setInvites((prev) => prev.filter((x) => x.id !== p.id));
+      },
       error,
       refresh,
       focus: setFocused,
@@ -162,7 +223,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
         setProjects((prev) => (prev ?? []).filter((x) => x.id !== p.id));
       },
     }),
-    [projects, error, refresh, user, keys],
+    [projects, invites, error, refresh, user, keys],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
@@ -173,3 +234,6 @@ export function useProjects(): ProjectsState {
   if (!v) throw new Error('useProjects outside ProjectsProvider');
   return v;
 }
+
+/** "an admin", "an editor", "a listener". */
+export const roleWithArticle = (role: string) => `${/^[aeiou]/.test(role) ? 'an' : 'a'} ${role}`;

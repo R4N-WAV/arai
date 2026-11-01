@@ -44,7 +44,12 @@ export interface ProjectDto {
   keyVersion: number;
   encMeta: string;
   publicMeta: PublicMeta | null;
-  grant: { wrappedKey: string; signature: string; grantedBy: string; granterSignKey: string } | null;
+  /** Every key version this member holds (keyring), newest last. */
+  grants: Array<{ keyVersion: number; wrappedKey: string; signature: string; grantedBy: string; granterSignKey: string }>;
+  /** A member was removed and the key has not been rotated yet (admins rotate). */
+  rotationDue: boolean;
+  /** Set while this is an invitation that has not been accepted. */
+  invitedBy?: string;
   createdAt: number;
   updatedAt: number;
 }

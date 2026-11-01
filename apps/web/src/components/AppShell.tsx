@@ -1,7 +1,8 @@
 import { useEffect, type ReactNode } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router';
 import { useSession } from '../lib/session';
-import { IconDiscover, IconLibrary, IconMessages, IconSettings } from './Icons';
+import { IconBell, IconDiscover, IconLibrary, IconMessages, IconSettings } from './Icons';
+import { useUnread } from '../lib/activity';
 import { HomeLink } from './Logo';
 import { PlayerBar } from './PlayerBar';
 import { usePlayer } from '../lib/player';
@@ -49,11 +50,19 @@ function useBottomChrome(active: unknown) {
 export function AppShellWith({ children }: { children: ReactNode }) {
   const { user, signOut } = useSession();
   const { item } = usePlayer();
-  useBottomChrome(Boolean(item));
   const location = useLocation();
+  useBottomChrome(Boolean(item));
+  const unread = useUnread(location.pathname);
+  const bell = (cls: string) => (
+    <Link to="/activity" className={cls} aria-label={unread ? `Activity, ${unread} new` : 'Activity'} viewTransition>
+      <IconBell />
+      {cls === 'nav-link' && <span>Activity</span>}
+      {unread > 0 && <span className="badge" aria-hidden="true">{unread > 9 ? '9+' : unread}</span>}
+    </Link>
+  );
   const navigate = useNavigate();
   // Top-level tabs have no back button; everything deeper does (installed apps have no browser back).
-  const isTop = ['/', '/discover', '/messages', '/settings'].includes(location.pathname);
+  const isTop = ['/', '/discover', '/messages', '/settings', '/activity'].includes(location.pathname);
   const goBack = () => (window.history.state?.idx > 0 ? navigate(-1) : navigate('/', { viewTransition: true }));
   const back = (cls: string) => !isTop && (
     <button type="button" className={`back-btn ${cls}`} onClick={goBack} aria-label="Back">
@@ -75,7 +84,7 @@ export function AppShellWith({ children }: { children: ReactNode }) {
       <a className="skip-link" href="#main">Skip to content</a>
       <nav className="sidebar" aria-label="Main">
         <HomeLink />
-        <div className="nav-group">{links}</div>
+        <div className="nav-group">{links}{bell('nav-link')}</div>
         {projects && projects.length > 0 && (
           <div className="nav-projects">
             <p className="nav-heading">Your projects</p>
@@ -107,6 +116,7 @@ export function AppShellWith({ children }: { children: ReactNode }) {
             {isTop && <HomeLink />}
           </span>
           <span className="form-actions">
+            {bell('icon-btn bell')}
             <Link to={`/u/${user?.username ?? ''}`} className="mobile-avatar" aria-label="Your profile"><Avatar profile={me} size={32} /></Link>
             <button type="button" className="btn btn-ghost btn-sm" onClick={() => void signOut()}>Sign out</button>
           </span>

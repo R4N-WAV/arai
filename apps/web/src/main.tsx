@@ -1,5 +1,8 @@
 import { StrictMode, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
+import { Discover } from './pages/Discover';
+import { Activity } from './pages/Activity';
+import { ListenPage, SharePage } from './pages/SharePage';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router';
 import { AmbientProvider } from './components/Ambient';
 import { AppShell, AppShellWith } from './components/AppShell';
@@ -80,13 +83,16 @@ createRoot(document.getElementById('root')!).render(
             <Route index element={<Library />} />
             <Route path="projects/new" element={<NewProject />} />
             <Route path="projects/:id" element={<ProjectPage />} />
-            <Route path="discover" element={<NotBuilt title="Discover" />} />
+            <Route path="discover" element={<Discover />} />
+            <Route path="activity" element={<Activity />} />
             <Route path="messages" element={<NotBuilt title="Messages" />} />
             <Route path="settings" element={<Settings />} />
             <Route path="profile/edit" element={<EditProfile />} />
             <Route path="import" element={<ImportPage />} />
           </Route>
           <Route path="/u/:username" element={<ProfileRoute />} />
+          <Route path="/s/:id" element={<SharePage />} />
+          <Route path="/listen/:projectId" element={<ListenPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>

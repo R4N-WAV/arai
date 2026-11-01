@@ -345,3 +345,4 @@ export async function fingerprint(boxPublicKey: Uint8Array, signPublicKey: Uint8
 
 export * from './chunks.js';
 export * from './grants.js';
+export * from './share.js';

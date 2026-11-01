@@ -7,6 +7,8 @@ export interface QueueItem {
   project: Project;
   track: Track;
   version: TrackVersion;
+  /** Start position in seconds (jumping to a comment). */
+  startAt?: number;
 }
 
 interface PlayerState {
@@ -65,8 +67,13 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       // Stream (starts after the first chunk); fall back to full decrypt.
       let url = await streamUrl(it.project, it.version).catch(() => null);
       if (token !== loadToken.current) return;
+      const startAt = it.startAt ?? 0;
+      const applyStart = () => {
+        if (startAt > 0) el.addEventListener('loadedmetadata', () => (el.currentTime = startAt), { once: true });
+      };
       if (url) {
         el.src = url;
+        applyStart();
         el.playbackRate = rate;
         try {
           await el.play();
@@ -79,6 +86,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       const blobUrl = await audioUrl(it.project, it.version, (p) => token === loadToken.current && setLoadProgress(p));
       if (token !== loadToken.current) return;
       el.src = blobUrl;
+      applyStart();
       el.playbackRate = rate;
       await el.play();
     } catch {

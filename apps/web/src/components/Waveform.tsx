@@ -15,6 +15,7 @@ export function Waveform({
   label = 'Seek',
   className = 'waveform',
   color = '#f2efea',
+  markers = [],
 }: {
   data: WaveData | null;
   current: number;
@@ -23,6 +24,8 @@ export function Waveform({
   label?: string;
   className?: string;
   color?: string;
+  /** Comment positions, 0–1 along the track (decorative; the comment list is the accessible view). */
+  markers?: Array<{ id: string; ratio: number; active?: boolean }>;
 }) {
   const wrap = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -118,6 +121,9 @@ export function Waveform({
       onKeyDown={onKey}
     >
       <canvas ref={canvas} aria-hidden="true" />
+      {markers.map((m) => (
+        <span key={m.id} className={`wave-marker${m.active ? ' active' : ''}`} style={{ left: `${Math.min(100, Math.max(0, m.ratio * 100))}%` }} aria-hidden="true" />
+      ))}
     </div>
   );
 }

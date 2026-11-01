@@ -6,6 +6,7 @@ import { inspectImage } from '../lib/images.js';
 import { rateLimit } from '../lib/ratelimit.js';
 import { clientIp, requireUser, type AuthedBindings } from '../lib/session.js';
 import { parseBody } from '../lib/validate.js';
+import { reindexProfile } from './social.js';
 
 const profiles = new Hono<AppBindings>();
 const notFound = (c: Context) => c.json({ error: 'not_found' }, 404);
@@ -25,9 +26,13 @@ export async function loadProfile(db: D1Database, where: { username: string } | 
     .first<{ id: string; username: string; created_at: number; display_name: string | null; bio: string | null; location: string | null; links_json: string | null; avatar: number | null; banner: number | null }>();
   if (!u) return null;
   const { results } = await db
-    .prepare("SELECT id, public_meta, published_at FROM projects WHERE owner_id = ? AND visibility = 'public' AND deleted_at IS NULL ORDER BY published_at DESC LIMIT 100")
+    .prepare(
+      `SELECT p.id, p.public_meta, p.published_at,
+         EXISTS (SELECT 1 FROM share_links l WHERE l.project_id = p.id AND l.is_public = 1 AND l.revoked_at IS NULL) AS listenable
+       FROM projects p WHERE p.owner_id = ? AND p.visibility = 'public' AND p.deleted_at IS NULL AND p.hidden_at IS NULL ORDER BY p.published_at DESC LIMIT 100`,
+    )
     .bind(u.id)
-    .all<{ id: string; public_meta: string; published_at: number }>();
+    .all<{ id: string; public_meta: string; published_at: number; listenable: number }>();
   return {
     username: u.username,
     displayName: u.display_name ?? '',
@@ -37,7 +42,7 @@ export async function loadProfile(db: D1Database, where: { username: string } | 
     avatar: u.avatar,
     banner: u.banner,
     joinedAt: u.created_at,
-    projects: results.map((r) => ({ id: r.id, publicMeta: JSON.parse(r.public_meta), publishedAt: r.published_at })),
+    projects: results.map((r) => ({ id: r.id, publicMeta: JSON.parse(r.public_meta), publishedAt: r.published_at, listenable: r.listenable === 1 })),
   };
 }
 
@@ -79,6 +84,7 @@ own.put('/account/profile', async (c) => {
     `INSERT INTO profiles (user_id, display_name, bio, location, links_json, updated_at) VALUES (?, ?, ?, ?, ?, ?)
      ON CONFLICT(user_id) DO UPDATE SET display_name = excluded.display_name, bio = excluded.bio, location = excluded.location, links_json = excluded.links_json, updated_at = excluded.updated_at`,
   ).bind(userId, body.displayName, body.bio, body.location, JSON.stringify(body.links), Date.now()).run();
+  await reindexProfile(c.env.DB, userId);
   return c.json({ profile: await loadProfile(c.env.DB, { userId }) });
 });
 

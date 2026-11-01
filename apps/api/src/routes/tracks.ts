@@ -136,23 +136,29 @@ async function usableFile(db: D1Database, fileId: string, projectId: string): Pr
   return !!f;
 }
 
-async function listTracks(db: D1Database, projectId: string, trackId?: string): Promise<TrackDto[]> {
+async function currentKey(db: D1Database, projectId: string): Promise<number> {
+  const p = await db.prepare('SELECT key_version FROM projects WHERE id = ?').bind(projectId).first<{ key_version: number }>();
+  return p!.key_version;
+}
+
+export async function listTracks(db: D1Database, projectId: string, trackId?: string): Promise<TrackDto[]> {
   const t = await db
-    .prepare(`SELECT id, enc_meta, position, current_version_id, created_at, updated_at FROM tracks WHERE project_id = ? AND deleted_at IS NULL ${trackId ? 'AND id = ?' : ''} ORDER BY position, created_at`)
+    .prepare(`SELECT id, enc_meta, key_version, position, current_version_id, created_at, updated_at FROM tracks WHERE project_id = ? AND deleted_at IS NULL ${trackId ? 'AND id = ?' : ''} ORDER BY position, created_at`)
     .bind(...(trackId ? [projectId, trackId] : [projectId]))
-    .all<{ id: string; enc_meta: ArrayBuffer; position: number; current_version_id: string | null; created_at: number; updated_at: number }>();
+    .all<{ id: string; enc_meta: ArrayBuffer; key_version: number; position: number; current_version_id: string | null; created_at: number; updated_at: number }>();
   if (t.results.length === 0) return [];
   const v = await db
     .prepare(
-      `SELECT v.id, v.track_id, v.number, v.enc_meta, v.created_by, v.created_at, f.id AS file_id, f.enc_size, f.chunk_count, f.enc_file_key, f.key_version
+      `SELECT v.id, v.track_id, v.number, v.enc_meta, v.key_version AS meta_key_version, v.created_by, v.created_at, f.id AS file_id, f.enc_size, f.chunk_count, f.enc_file_key, f.key_version
          FROM track_versions v JOIN tracks t ON t.id = v.track_id JOIN files f ON f.id = v.file_id
         WHERE t.project_id = ? AND t.deleted_at IS NULL ORDER BY v.number`,
     )
     .bind(projectId)
-    .all<{ id: string; track_id: string; number: number; enc_meta: ArrayBuffer; created_by: string; created_at: number; file_id: string; enc_size: number; chunk_count: number; enc_file_key: ArrayBuffer; key_version: number }>();
+    .all<{ id: string; track_id: string; number: number; enc_meta: ArrayBuffer; meta_key_version: number; created_by: string; created_at: number; file_id: string; enc_size: number; chunk_count: number; enc_file_key: ArrayBuffer; key_version: number }>();
   return t.results.map((r) => ({
     id: r.id,
     encMeta: toB64(r.enc_meta),
+    keyVersion: r.key_version,
     position: r.position,
     currentVersionId: r.current_version_id,
     createdAt: r.created_at,
@@ -163,6 +169,7 @@ async function listTracks(db: D1Database, projectId: string, trackId?: string): 
         id: x.id,
         number: x.number,
         encMeta: toB64(x.enc_meta),
+        keyVersion: x.meta_key_version,
         createdBy: x.created_by,
         createdAt: x.created_at,
         file: { id: x.file_id, encSize: x.enc_size, chunkCount: x.chunk_count, encFileKey: toB64(x.enc_file_key), keyVersion: x.key_version },
@@ -183,17 +190,19 @@ tracks.post('/projects/:id/tracks', async (c) => {
   if (!g.ok) return g.res;
   const body = await parseBody(c, createTrackRequest);
   if (!body) return bad(c);
+  const kv = await currentKey(c.env.DB, projectId);
+  if (body.keyVersion !== kv || body.version.keyVersion !== kv) return c.json({ error: 'stale_key' }, 409);
   if (!(await usableFile(c.env.DB, body.version.fileId, projectId))) return c.json({ error: 'file_not_ready' }, 409);
   const userId = c.get('session').user_id;
   const now = Date.now();
   const max = await c.env.DB.prepare('SELECT COALESCE(MAX(position), 0) AS p FROM tracks WHERE project_id = ?').bind(projectId).first<{ p: number }>();
   try {
     await c.env.DB.batch([
-      c.env.DB.prepare('INSERT INTO tracks (id, project_id, enc_meta, position, current_version_id, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').bind(
-        body.id, projectId, fromB64(body.encMeta), (max?.p ?? 0) + 1, body.version.id, userId, now, now,
+      c.env.DB.prepare('INSERT INTO tracks (id, project_id, enc_meta, key_version, position, current_version_id, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(
+        body.id, projectId, fromB64(body.encMeta), kv, (max?.p ?? 0) + 1, body.version.id, userId, now, now,
       ),
-      c.env.DB.prepare('INSERT INTO track_versions (id, track_id, number, file_id, enc_meta, created_by, created_at) VALUES (?, ?, 1, ?, ?, ?, ?)').bind(
-        body.version.id, body.id, body.version.fileId, fromB64(body.version.encMeta), userId, now,
+      c.env.DB.prepare('INSERT INTO track_versions (id, track_id, number, file_id, enc_meta, key_version, created_by, created_at) VALUES (?, ?, 1, ?, ?, ?, ?, ?)').bind(
+        body.version.id, body.id, body.version.fileId, fromB64(body.version.encMeta), kv, userId, now,
       ),
       c.env.DB.prepare('UPDATE projects SET updated_at = ? WHERE id = ?').bind(now, projectId),
     ]);
@@ -217,13 +226,14 @@ tracks.post('/tracks/:trackId/versions', async (c) => {
   if (!g.ok) return g.res;
   const body = await parseBody(c, addVersionRequest);
   if (!body) return bad(c);
+  if (body.keyVersion !== (await currentKey(c.env.DB, projectId))) return c.json({ error: 'stale_key' }, 409);
   if (!(await usableFile(c.env.DB, body.fileId, projectId))) return c.json({ error: 'file_not_ready' }, 409);
   const now = Date.now();
   const n = await c.env.DB.prepare('SELECT COALESCE(MAX(number), 0) AS n FROM track_versions WHERE track_id = ?').bind(trackId).first<{ n: number }>();
   try {
     await c.env.DB.batch([
-      c.env.DB.prepare('INSERT INTO track_versions (id, track_id, number, file_id, enc_meta, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(
-        body.id, trackId, (n?.n ?? 0) + 1, body.fileId, fromB64(body.encMeta), c.get('session').user_id, now,
+      c.env.DB.prepare('INSERT INTO track_versions (id, track_id, number, file_id, enc_meta, key_version, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').bind(
+        body.id, trackId, (n?.n ?? 0) + 1, body.fileId, fromB64(body.encMeta), body.keyVersion, c.get('session').user_id, now,
       ),
       c.env.DB.prepare('UPDATE tracks SET current_version_id = ?, updated_at = ? WHERE id = ?').bind(body.id, now, trackId),
     ]);
@@ -248,7 +258,11 @@ tracks.patch('/tracks/:trackId', async (c) => {
   }
   const sets = ['updated_at = ?'];
   const args: unknown[] = [Date.now()];
-  if (body.encMeta !== undefined) (sets.push('enc_meta = ?'), args.push(fromB64(body.encMeta)));
+  if (body.encMeta !== undefined) {
+    if (body.keyVersion !== (await currentKey(c.env.DB, projectId))) return c.json({ error: 'stale_key' }, 409);
+    sets.push('enc_meta = ?', 'key_version = ?');
+    args.push(fromB64(body.encMeta), body.keyVersion);
+  }
   if (body.currentVersionId !== undefined) (sets.push('current_version_id = ?'), args.push(body.currentVersionId));
   if (body.position !== undefined) (sets.push('position = ?'), args.push(body.position));
   await c.env.DB.prepare(`UPDATE tracks SET ${sets.join(', ')} WHERE id = ?`).bind(...args, trackId).run();

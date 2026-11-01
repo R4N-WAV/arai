@@ -72,8 +72,8 @@ await dlg.waitFor({ state: 'hidden' });
 await page.getByText('now with strings').waitFor();
 step('details edited in the overlay and re-encrypted');
 const actions = await page.locator('.project-actions button').allTextContents();
-if (actions.join('|') !== 'Edit details') throw new Error(`unexpected project buttons: ${actions}`);
-step('project page shows only Edit details (Add tracks appears once there are tracks)');
+if (actions.join('|') !== 'People|Edit details') throw new Error(`unexpected project buttons: ${actions}`);
+step('empty project shows People and Edit details (Play, Add tracks and Share appear once there are tracks)');
 
 // make public, then private again (inside the overlay)
 await page.getByRole('button', { name: 'Edit details' }).click();

@@ -5,18 +5,21 @@ import { Field } from '../components/Field';
 import { Modal } from '../components/Modal';
 import { ProjectForm } from '../components/ProjectForm';
 import { TracksSection } from '../components/TracksSection';
+import { PeopleDialog } from '../components/PeopleDialog';
+import { ShareDialog } from '../components/ShareDialog';
+import { ensurePublicListening } from '../lib/collab';
 import { Notice } from '../components/Unavailable';
 import { errorMessage } from '../lib/api';
 import { formatTime } from '../lib/audio';
 import { usePlayer } from '../lib/player';
-import { useProjects, type Project } from '../lib/projects';
+import { roleWithArticle, useProjects, type Project } from '../lib/projects';
 import type { Track } from '../lib/tracks';
 import { useSession } from '../lib/session';
 
 const date = (t: number) => new Date(t).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
 
 /** Everything about the project itself, in one overlay: details, visibility, deletion. */
-function EditDetails({ p, open, onClose }: { p: Project; open: boolean; onClose: () => void }) {
+function EditDetails({ p, open, onClose, tracks }: { p: Project; open: boolean; onClose: () => void; tracks: Track[] }) {
   const { update, remove } = useProjects();
   const nav = useNavigate();
   const [confirmVis, setConfirmVis] = useState(false);
@@ -68,7 +71,7 @@ function EditDetails({ p, open, onClose }: { p: Project; open: boolean; onClose:
           <h3 id="vis-h">Visibility</h3>
           <p className="row-sub">
             {p.visibility === 'public'
-              ? 'Public: anyone can find this project and see its name, description, genre and tags.'
+              ? 'Public: anyone can find this project and listen to the current version of each track.'
               : 'Private: only you and the people you invite. Encrypted so that not even Arai can read it.'}
           </p>
           {!confirmVis ? (
@@ -81,7 +84,7 @@ function EditDetails({ p, open, onClose }: { p: Project; open: boolean; onClose:
                   : 'Its name, description, genre and tags will be stored unencrypted and visible to anyone. Everything else stays encrypted. You can make it private again later.'}
               </p>
               <div className="form-actions">
-                <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={() => run(() => update(p, { visibility: p.visibility === 'public' ? 'private' : 'public' }), p.visibility === 'public' ? 'The project is private now.' : 'The project is public now.')}>
+                <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={() => run(async () => { const next = await update(p, { visibility: p.visibility === 'public' ? 'private' : 'public' }); await ensurePublicListening(next, tracks); }, p.visibility === 'public' ? 'The project is private now.' : 'The project is public now. Anyone can listen from your profile.')}>
                   {p.visibility === 'public' ? 'Make private' : 'Make public'}
                 </button>
                 <button type="button" className="btn btn-ghost btn-sm" onClick={() => setConfirmVis(false)}>Cancel</button>
@@ -110,6 +113,8 @@ export function ProjectPage() {
   const { projects, focus } = useProjects();
   const [editOpen, setEditOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
+  const [peopleOpen, setPeopleOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   const [tracks, setTracks] = useState<Track[] | null>(null);
   const count = tracks?.length ?? null;
   const player = usePlayer();
@@ -152,10 +157,11 @@ export function ProjectPage() {
           <p className="row-sub project-meta">
             {count ? `${count} track${count === 1 ? '' : 's'} · ${formatTime(tracks!.reduce((n, t) => n + (t.current?.meta?.duration ?? 0), 0))} · ` : ''}
             {p.visibility === 'public' ? 'public' : 'private'} · created {date(p.createdAt)}
-            {p.role !== 'owner' && ` · you are ${p.role === 'admin' ? 'an admin' : `a ${p.role}`}`}
+            {p.role !== 'owner' && ` · you are ${roleWithArticle(p.role)}`}
           </p>
           <h1>{meta.name}</h1>
           {p.role === 'owner' && user && <p className="row-sub project-owner">by {user.username}</p>}
+          {p.rotationDue && p.role !== 'owner' && p.role !== 'admin' && <p className="row-sub">Someone left; an admin’s browser will refresh the project key next time they open Arai.</p>}
           {meta.description && <p className="voice project-description">{meta.description}</p>}
           {(meta.genre || meta.tags.length > 0) && (
             <p className="project-tags">
@@ -184,6 +190,16 @@ export function ProjectPage() {
                 <span className="btn-label">Add tracks</span>
               </button>
             )}
+            {canEdit && count !== null && count > 0 && (
+              <button type="button" className="btn btn-icon-label" aria-label="Share" onClick={() => setShareOpen(true)}>
+                <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1" /><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" /></svg>
+                <span className="btn-label">Share</span>
+              </button>
+            )}
+            <button type="button" className="btn btn-icon-label" aria-label="People" onClick={() => setPeopleOpen(true)}>
+              <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="8" r="3.2" /><path d="M3.5 19c.6-3 2.8-4.6 5.5-4.6s4.9 1.6 5.5 4.6" /><path d="M16 5.2a3 3 0 0 1 0 5.6M18 14.6c1.4.6 2.3 2 2.6 4.4" /></svg>
+              <span className="btn-label">People</span>
+            </button>
             {canEdit && (
               <button type="button" className="btn btn-icon-label" aria-label="Edit details" onClick={() => setEditOpen(true)}>
                 <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 20h4L19 9l-4-4L4 16z" /><path d="m13.5 6.5 4 4" /></svg>
@@ -195,7 +211,9 @@ export function ProjectPage() {
       </header>
 
       <TracksSection project={p} addOpen={addOpen} setAddOpen={setAddOpen} onTracks={setTracks} />
-      {canEdit && <EditDetails p={p} open={editOpen} onClose={() => setEditOpen(false)} />}
+      {canEdit && <EditDetails p={p} open={editOpen} onClose={() => setEditOpen(false)} tracks={tracks ?? []} />}
+      <PeopleDialog p={p} open={peopleOpen} onClose={() => setPeopleOpen(false)} />
+      {canEdit && <ShareDialog p={p} tracks={tracks ?? []} open={shareOpen} onClose={() => setShareOpen(false)} />}
     </div>
   );
 }

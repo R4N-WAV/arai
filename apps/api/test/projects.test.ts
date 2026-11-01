@@ -16,7 +16,7 @@ async function userId(username: string) {
   return (await env.DB.prepare('SELECT id FROM users WHERE username = ?').bind(username).first<{ id: string }>())!.id;
 }
 async function addMember(projectId: string, username: string, role: string) {
-  await env.DB.prepare('INSERT INTO project_members (project_id, user_id, role, created_at) VALUES (?, ?, ?, ?)').bind(projectId, await userId(username), role, Date.now()).run();
+  await env.DB.prepare('INSERT INTO project_members (project_id, user_id, role, created_at, accepted_at) VALUES (?, ?, ?, ?, ?)').bind(projectId, await userId(username), role, Date.now(), Date.now()).run();
 }
 
 describe('projects: create and list', () => {
@@ -26,8 +26,8 @@ describe('projects: create and list', () => {
     const r = await c.call('POST', '/projects', body);
     expect(r.status).toBe(201);
     expect(r.json.project).toMatchObject({ id: body.id, role: 'owner', visibility: 'private', keyVersion: 1, encMeta: body.encMeta, publicMeta: null });
-    expect(r.json.project.grant).toMatchObject({ wrappedKey: body.grant.wrappedKey, signature: body.grant.signature });
-    expect(r.json.project.grant.granterSignKey).toBeTruthy();
+    expect(r.json.project.grants[0]).toMatchObject({ wrappedKey: body.grant.wrappedKey, signature: body.grant.signature });
+    expect(r.json.project.grants[0].granterSignKey).toBeTruthy();
     const list = await c.call('GET', '/projects');
     expect(list.json.projects.map((p: any) => p.id)).toEqual([body.id]);
   });

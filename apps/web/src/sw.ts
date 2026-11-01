@@ -23,6 +23,8 @@ interface Reg {
   count: number;
   encSize: number;
   mime: string;
+  base?: string;
+  shareToken?: string;
 }
 
 const regs = new Map<string, Reg>();
@@ -59,7 +61,9 @@ function chunk(r: Reg, i: number): Promise<Uint8Array> {
   let p = plainCache.get(id);
   if (!p) {
     p = (async () => {
-      const res = await fetch(`/api/files/${r.fileId}/chunks/${i}`, { credentials: 'same-origin' });
+      const res = r.base
+        ? await fetch(`${r.base}${r.fileId}/chunks/${i}`, { headers: { 'X-Share-Token': r.shareToken ?? '' }, credentials: 'omit' })
+        : await fetch(`/api/files/${r.fileId}/chunks/${i}`, { credentials: 'same-origin' });
       if (!res.ok) throw new Error(`chunk ${i}: ${res.status}`);
       return decryptChunk(r.key, r.fileId, i, i === r.count - 1, new Uint8Array(await res.arrayBuffer()));
     })();

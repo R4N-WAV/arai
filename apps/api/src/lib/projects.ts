@@ -14,7 +14,7 @@ export async function requireProjectRole(db: D1Database, projectId: string, user
   const m = await db
     .prepare(
       `SELECT m.role, p.owner_id FROM project_members m JOIN projects p ON p.id = m.project_id
-        WHERE m.project_id = ? AND m.user_id = ? AND m.revoked_at IS NULL AND p.deleted_at IS NULL`,
+        WHERE m.project_id = ? AND m.user_id = ? AND m.revoked_at IS NULL AND m.accepted_at IS NOT NULL AND p.deleted_at IS NULL`,
     )
     .bind(projectId, userId)
     .first<Membership>();

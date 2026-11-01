@@ -3,10 +3,8 @@
  * full-file decryption when no service worker controls the page
  * (first visit before activation, dev server, unsupported browser).
  */
-import { fromBase64Url, open } from '@arai/crypto';
 import type { Project } from './projects';
-import { projectKey } from './projects';
-import type { TrackVersion } from './tracks';
+import { fileKeyOf, type TrackVersion } from './tracks';
 
 let ready: Promise<ServiceWorker | null> | null = null;
 
@@ -45,14 +43,35 @@ export async function streamUrl(project: Project, v: TrackVersion): Promise<stri
   const sw = navigator.serviceWorker?.controller ?? (await startStreamingWorker());
   if (!sw) return null;
   if (cached) return cached;
-  const key = projectKey(project);
-  if (!key) return null;
-  const fileKey = await open(key, await fromBase64Url(v.file.encFileKey), `file/${v.file.id}/key`);
-  const token = crypto.randomUUID();
-  await send(sw, { type: 'register', token, reg: { fileId: v.file.id, key: fileKey, count: v.file.chunkCount, encSize: v.file.encSize, mime: v.meta?.mime ?? 'application/octet-stream' } });
-  const url = `/_stream/${token}`;
+  const fileKey = await fileKeyOf(project, v).catch(() => null);
+  if (!fileKey) return null;
+  const url = await registerStream(sw, { fileId: v.file.id, key: fileKey, count: v.file.chunkCount, encSize: v.file.encSize, mime: v.meta?.mime ?? 'application/octet-stream' });
   tokens.set(v.id, url);
   return url;
+}
+
+export interface StreamSource {
+  fileId: string;
+  key: Uint8Array;
+  count: number;
+  encSize: number;
+  mime: string;
+  /** Share links: chunk URL prefix and access token instead of the session cookie. */
+  base?: string;
+  shareToken?: string;
+}
+
+/** Registers a decryptable stream with the service worker; returns its URL. */
+export async function registerStream(sw: ServiceWorker, reg: StreamSource): Promise<string> {
+  const token = crypto.randomUUID();
+  await send(sw, { type: 'register', token, reg });
+  return `/_stream/${token}`;
+}
+
+/** For pages outside the app shell (share links): a stream URL or null. */
+export async function streamFor(reg: StreamSource): Promise<string | null> {
+  const sw = navigator.serviceWorker?.controller ?? (await startStreamingWorker());
+  return sw ? registerStream(sw, reg).catch(() => null) : null;
 }
 
 /** Warm up the first chunk of a track so starting it is instant. */

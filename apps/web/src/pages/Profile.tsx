@@ -29,7 +29,7 @@ export function ProfilePage() {
     );
   }
   if (!profile) return <p className="muted" role="status">Loading…</p>;
-  return <ProfileView profile={profile} isOwn={user?.username.toLowerCase() === profile.username.toLowerCase()} />;
+  return <ProfileView profile={profile} isOwn={user?.username.toLowerCase() === profile.username.toLowerCase()} signedIn={!!user} />;
 }
 
 /** The same profile for visitors who are not signed in. */

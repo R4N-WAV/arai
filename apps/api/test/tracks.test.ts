@@ -20,7 +20,7 @@ async function userId(name: string) {
   return (await env.DB.prepare('SELECT id FROM users WHERE username = ?').bind(name).first<{ id: string }>())!.id;
 }
 async function addMember(projectId: string, name: string, role: string) {
-  await env.DB.prepare('INSERT INTO project_members (project_id, user_id, role, created_at) VALUES (?, ?, ?, ?)').bind(projectId, await userId(name), role, Date.now()).run();
+  await env.DB.prepare('INSERT INTO project_members (project_id, user_id, role, created_at, accepted_at) VALUES (?, ?, ?, ?, ?)').bind(projectId, await userId(name), role, Date.now(), Date.now()).run();
 }
 
 describe('encrypted file upload', () => {
@@ -102,12 +102,12 @@ describe('tracks and versions', () => {
     const f1 = await uploadFile(c, p, [300]);
     const t = pid();
     const v1 = pid();
-    const created = await c.call('POST', `/projects/${p}/tracks`, { id: t, encMeta: blob(), version: { id: v1, fileId: f1, encMeta: blob() } });
+    const created = await c.call('POST', `/projects/${p}/tracks`, { id: t, encMeta: blob(), keyVersion: 1, version: { id: v1, fileId: f1, encMeta: blob(), keyVersion: 1 } });
     expect(created.status).toBe(201);
     expect(created.json.track.currentVersionId).toBe(v1);
     const f2 = await uploadFile(c, p, [400]);
     const v2 = pid();
-    const added = await c.call('POST', `/tracks/${t}/versions`, { id: v2, fileId: f2, encMeta: blob() });
+    const added = await c.call('POST', `/tracks/${t}/versions`, { id: v2, fileId: f2, encMeta: blob(), keyVersion: 1 });
     expect(added.json.track.versions.map((v: any) => v.number)).toEqual([1, 2]);
     expect(added.json.track.currentVersionId).toBe(v2);
     const restored = await c.call('PATCH', `/tracks/${t}`, { currentVersionId: v1 });
@@ -121,7 +121,7 @@ describe('tracks and versions', () => {
     const { c } = await registered('tr_append');
     const p = await newProject(c);
     const f = await uploadFile(c, p, [300]);
-    await c.call('POST', `/projects/${p}/tracks`, { id: pid(), encMeta: blob(), version: { id: pid(), fileId: f, encMeta: blob() } });
+    await c.call('POST', `/projects/${p}/tracks`, { id: pid(), encMeta: blob(), keyVersion: 1, version: { id: pid(), fileId: f, encMeta: blob(), keyVersion: 1 } });
     await expect(env.DB.prepare('UPDATE track_versions SET file_id = file_id').run()).rejects.toThrow(/append-only/);
   });
 
@@ -131,12 +131,12 @@ describe('tracks and versions', () => {
     const p2 = await newProject(c);
     const pending = pid();
     await c.call('POST', `/projects/${p1}/files`, { id: pending, kind: 'audio', encSize: 100, chunkCount: 1, encFileKey: blob(), keyVersion: 1 });
-    expect((await c.call('POST', `/projects/${p1}/tracks`, { id: pid(), encMeta: blob(), version: { id: pid(), fileId: pending, encMeta: blob() } })).status).toBe(409);
+    expect((await c.call('POST', `/projects/${p1}/tracks`, { id: pid(), encMeta: blob(), keyVersion: 1, version: { id: pid(), fileId: pending, encMeta: blob(), keyVersion: 1 } })).status).toBe(409);
     const other = await uploadFile(c, p2, [100]);
-    expect((await c.call('POST', `/projects/${p1}/tracks`, { id: pid(), encMeta: blob(), version: { id: pid(), fileId: other, encMeta: blob() } })).status).toBe(409);
+    expect((await c.call('POST', `/projects/${p1}/tracks`, { id: pid(), encMeta: blob(), keyVersion: 1, version: { id: pid(), fileId: other, encMeta: blob(), keyVersion: 1 } })).status).toBe(409);
     const f = await uploadFile(c, p1, [100]);
-    expect((await c.call('POST', `/projects/${p1}/tracks`, { id: pid(), encMeta: blob(), version: { id: pid(), fileId: f, encMeta: blob() } })).status).toBe(201);
-    expect((await c.call('POST', `/projects/${p1}/tracks`, { id: pid(), encMeta: blob(), version: { id: pid(), fileId: f, encMeta: blob() } })).status).toBe(409);
+    expect((await c.call('POST', `/projects/${p1}/tracks`, { id: pid(), encMeta: blob(), keyVersion: 1, version: { id: pid(), fileId: f, encMeta: blob(), keyVersion: 1 } })).status).toBe(201);
+    expect((await c.call('POST', `/projects/${p1}/tracks`, { id: pid(), encMeta: blob(), keyVersion: 1, version: { id: pid(), fileId: f, encMeta: blob(), keyVersion: 1 } })).status).toBe(409);
   });
 
   it('enforces roles and hides tracks from outsiders', async () => {
@@ -146,11 +146,11 @@ describe('tracks and versions', () => {
     const p = await newProject(owner);
     await addMember(p, 'tr_edi3', 'editor');
     const f = await uploadFile(owner, p, [100]);
-    const t = (await owner.call('POST', `/projects/${p}/tracks`, { id: pid(), encMeta: blob(), version: { id: pid(), fileId: f, encMeta: blob() } })).json.track.id;
+    const t = (await owner.call('POST', `/projects/${p}/tracks`, { id: pid(), encMeta: blob(), keyVersion: 1, version: { id: pid(), fileId: f, encMeta: blob(), keyVersion: 1 } })).json.track.id;
     expect((await mallory.call('GET', `/projects/${p}/tracks`)).status).toBe(404);
-    expect((await mallory.call('PATCH', `/tracks/${t}`, { encMeta: blob() })).status).toBe(404);
+    expect((await mallory.call('PATCH', `/tracks/${t}`, { encMeta: blob(), keyVersion: 1 })).status).toBe(404);
     expect((await mallory.call('DELETE', `/tracks/${t}`)).status).toBe(404);
-    expect((await editor.call('PATCH', `/tracks/${t}`, { encMeta: blob() })).status).toBe(200);
+    expect((await editor.call('PATCH', `/tracks/${t}`, { encMeta: blob(), keyVersion: 1 })).status).toBe(200);
     expect((await editor.call('DELETE', `/tracks/${t}`)).status).toBe(403);
     expect((await owner.call('DELETE', `/tracks/${t}`)).status).toBe(200);
     expect((await owner.call('GET', `/projects/${p}/tracks`)).json.tracks).toEqual([]);
@@ -160,7 +160,7 @@ describe('tracks and versions', () => {
     const { c } = await registered('tr_purge');
     const p = await newProject(c);
     const f = await uploadFile(c, p, [5000]);
-    const t = (await c.call('POST', `/projects/${p}/tracks`, { id: pid(), encMeta: blob(), version: { id: pid(), fileId: f, encMeta: blob() } })).json.track.id;
+    const t = (await c.call('POST', `/projects/${p}/tracks`, { id: pid(), encMeta: blob(), keyVersion: 1, version: { id: pid(), fileId: f, encMeta: blob(), keyVersion: 1 } })).json.track.id;
     expect((await c.call('GET', '/account/storage')).json.used).toBe(5000);
     await c.call('DELETE', `/tracks/${t}`);
     expect((await c.call('GET', '/account/storage')).json.used).toBe(0);
