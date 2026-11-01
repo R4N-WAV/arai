@@ -6,7 +6,7 @@ CREATE TABLE users (
   username         TEXT NOT NULL COLLATE NOCASE,
   email_normalized TEXT NOT NULL,
   email_verified_at INTEGER,
-  status           TEXT NOT NULL DEFAULT 'pending'
+  status           TEXT NOT NULL DEFAULT 'active'
                    CHECK (status IN ('pending','active','restricted','suspended','banned','deleted')),
   created_at       INTEGER NOT NULL,
   deleted_at       INTEGER,
@@ -14,7 +14,11 @@ CREATE TABLE users (
   CHECK (username NOT GLOB '*[^A-Za-z0-9_.]*')
 );
 CREATE UNIQUE INDEX users_username_uq ON users(username);
-CREATE UNIQUE INDEX users_email_uq ON users(email_normalized);
+-- Emails are unique only once verified. Until email delivery exists
+-- (provider-gated), unverified emails can't block their real owner and
+-- registration never reveals whether an email is already in use.
+CREATE UNIQUE INDEX users_email_verified_uq ON users(email_normalized) WHERE email_verified_at IS NOT NULL;
+CREATE INDEX users_email ON users(email_normalized);
 
 -- Client-side Argon2id; server stores HMAC(pepper, authKey) per login path.
 CREATE TABLE credentials (
@@ -24,6 +28,7 @@ CREATE TABLE credentials (
   kdf_params     TEXT NOT NULL,         -- JSON {alg, opslimit, memlimit}
   auth_hash_u    BLOB NOT NULL,
   auth_hash_e    BLOB NOT NULL,
+  recovery_auth_hash BLOB,              -- HMAC(pepper, HKDF(recoveryKey)); enables email-less reset
   updated_at     INTEGER NOT NULL
 );
 

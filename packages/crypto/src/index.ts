@@ -256,6 +256,16 @@ export async function generateRecoveryKey(): Promise<{ key: Uint8Array; code: st
   return { key, code: encodeRecoveryCode(key) };
 }
 
+/**
+ * Proof of recovery-key possession for the email-less password reset.
+ * The server stores HMAC(pepper, recoveryAuthKey); the recovery key itself
+ * (which unwraps the ASK) never leaves the device.
+ */
+export async function deriveRecoveryAuthKey(recoveryKey: Uint8Array): Promise<Uint8Array> {
+  if (recoveryKey.length !== KEY_BYTES) throw new CryptoError('invalid recovery key');
+  return hkdf(recoveryKey, 'arai/recovery-auth/v1');
+}
+
 export function encodeRecoveryCode(key: Uint8Array): string {
   let bits = 0;
   let value = 0;

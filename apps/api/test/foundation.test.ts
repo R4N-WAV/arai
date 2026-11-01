@@ -48,10 +48,17 @@ describe('schema constraints', () => {
   const insertUser = (id: string, username: string, email: string) =>
     env.DB.prepare('INSERT INTO users (id, username, email_normalized, created_at) VALUES (?, ?, ?, ?)').bind(id, username, email, Date.now()).run();
 
-  it('enforces case-insensitive unique usernames and unique emails in the database', async () => {
+  it('enforces case-insensitive unique usernames in the database', async () => {
     await insertUser('u1', 'Producer', 'a@example.com');
     await expect(insertUser('u2', 'producer', 'b@example.com')).rejects.toThrow(/UNIQUE/);
-    await expect(insertUser('u3', 'other', 'a@example.com')).rejects.toThrow(/UNIQUE/);
+  });
+
+  it('enforces unique emails only once verified (unverified emails cannot be squatted)', async () => {
+    await insertUser('e1', 'claimer1', 'same@example.com');
+    await insertUser('e2', 'claimer2', 'same@example.com'); // both unverified: allowed
+    const verify = (id: string) => env.DB.prepare('UPDATE users SET email_verified_at = 1 WHERE id = ?').bind(id).run();
+    await verify('e1');
+    await expect(verify('e2')).rejects.toThrow(/UNIQUE/);
   });
 
   it('rejects invalid usernames at the database level', async () => {

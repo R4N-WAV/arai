@@ -6,6 +6,7 @@ import {
   decryptFile,
   decryptPrivateKeys,
   derivePasswordKeys,
+  deriveRecoveryAuthKey,
   encryptedChunkRange,
   encryptedSize,
   encryptFile,
@@ -95,6 +96,14 @@ describe('account vault', () => {
     expect(eq(restored.sign.privateKey, keys.sign.privateKey)).toBe(true);
     // slot binding: a password wrap cannot be presented as a recovery wrap
     await expect(unwrapAccountKey(vaultKey, byPw, 'recovery')).rejects.toThrow(CryptoError);
+  });
+
+  it('derives a recovery auth key distinct from the recovery key', async () => {
+    const { key } = await generateRecoveryKey();
+    const auth = await deriveRecoveryAuthKey(key);
+    expect(auth.length).toBe(32);
+    expect(eq(auth, key)).toBe(false);
+    expect(eq(auth, await deriveRecoveryAuthKey(key))).toBe(true);
   });
 
   it('rejects malformed recovery codes', () => {

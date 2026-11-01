@@ -17,7 +17,9 @@
   ],
   "vars": {
     "APP_ORIGIN": "http://localhost:8787",
-    "EMAIL_PROVIDER": "console"
+    "FEATURE_EMAIL": "off",
+    "FEATURE_SMS": "off",
+    "REQUIRE_TURNSTILE": "false"
   }
   // Secrets (wrangler secret put / .dev.vars, never committed):
   // AUTH_PEPPER, KDF_SALT_SECRET, IP_HMAC_SECRET, TURNSTILE_SECRET, EMAIL_API_KEY

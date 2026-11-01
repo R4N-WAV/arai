@@ -3,6 +3,7 @@ import { bodyLimit } from 'hono/body-limit';
 import type { AppBindings } from './env.js';
 import { randomId } from './lib/ids.js';
 import { originGuard, securityHeaders } from './lib/security.js';
+import auth from './routes/auth.js';
 
 const app = new Hono<AppBindings>();
 
@@ -18,6 +19,8 @@ app.get('/api/health', async (c) => {
   const db = await c.env.DB.prepare('SELECT 1 AS ok').first<{ ok: number }>();
   return c.json({ status: db?.ok === 1 ? 'ok' : 'degraded' });
 });
+
+app.route('/api', auth);
 
 app.notFound((c) => c.json({ error: 'not_found' }, 404));
 
