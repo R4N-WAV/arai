@@ -4,6 +4,7 @@ import type { AppBindings } from './env.js';
 import { randomId } from './lib/ids.js';
 import { originGuard, securityHeaders } from './lib/security.js';
 import auth from './routes/auth.js';
+import projects from './routes/projects.js';
 
 const app = new Hono<AppBindings>();
 
@@ -21,6 +22,7 @@ app.get('/api/health', async (c) => {
 });
 
 app.route('/api', auth);
+app.route('/api', projects);
 
 app.notFound((c) => c.json({ error: 'not_found' }, 404));
 

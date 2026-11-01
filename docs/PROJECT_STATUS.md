@@ -1,6 +1,6 @@
 # Project Status — authoritative checklist
 
-Last updated: 2026-11-01 (session 2). Tests: 51 passing (crypto 14, shared 4, api 33) + browser E2E auth flow (`apps/web/e2e/auth-flow.mjs`). `[x]` done & tested · `[~]` in progress · `[ ]` not started · `[!]` blocked.
+Last updated: 2026-11-01 (session 2). Tests: 65 passing (crypto 17, shared 4, api 44) + browser E2E: `auth-flow.mjs` (12 steps), `projects-flow.mjs` (8 steps). `[x]` done & tested · `[~]` in progress · `[ ]` not started · `[!]` blocked.
 
 ## Phase 0 — Research & architecture
 - [x] Repository inspected (empty, greenfield)
@@ -35,12 +35,15 @@ Last updated: 2026-11-01 (session 2). Tests: 51 passing (crypto 14, shared 4, ap
 - [ ] Account export & deletion
 
 ## Phase 2 — Music workspace
-- [ ] Projects CRUD (encrypted meta), folders, ordering (+ keyboard alternative)
+- [x] Projects: create / list / view / edit / public↔private / delete — metadata encrypted per project key, signed self-grant, `requireProjectRole` authz, migration 0002 (11 API tests incl. cross-user, roles, revocation; E2E incl. no-plaintext check)
+- [x] Project colour drives the ambient background (focus mode on the project page)
+- [ ] Folders, ordering (+ keyboard alternative), favourites, recents
 - [ ] Chunked encrypted upload via presigned R2 (progress/cancel/retry, magic-byte sniff)
 - [ ] Metadata extraction, waveform peaks, artwork
 - [ ] Service Worker decrypting stream + player (queue, seek, volume, loop)
 - [ ] Version history (append-only, restore, compare)
-- [ ] Favourites, recents, search (client-side for private)
+- [ ] Search (client-side for private)
+- [!] Uploads, artwork, player, versions — blocked until the owner enables R2 (see HANDOFF)
 
 ## Phase 3 — Privacy & collaboration
 - [ ] Project key envelopes, member key grants, pending grants

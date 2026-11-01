@@ -70,6 +70,10 @@ Libraries: **libsodium.js** (audited) and **Web Crypto**. No custom primitives.
 - Envelope: file key wrapped with project key `K_p(v)`; `K_p(v)` sealed
   (`crypto_box_seal`) to each member's X25519 public key. Metadata blobs
   encrypted directly with `K_p(v)`.
+- Grants are signed (`packages/crypto/src/grants.ts`): a sealed project key is
+  only accepted if the granter's Ed25519 signature over (scope, id, version,
+  recipient, hash(sealed)) verifies, so a server-substituted key is rejected.
+  Own grants are checked against the signing key held in the browser.
 - Rotation: on revoke or on demand → new `K_p(v+1)`, re-wrap all file keys and
   metadata; remaining members receive sealed `K_p(v+1)`.
 - Share links: link key generated client-side, placed in URL **fragment**

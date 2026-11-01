@@ -5,7 +5,7 @@ export class ApiError extends Error {
   }
 }
 
-export async function api<T>(method: 'GET' | 'POST' | 'DELETE', path: string, body?: unknown): Promise<T> {
+export async function api<T>(method: 'GET' | 'POST' | 'PATCH' | 'DELETE', path: string, body?: unknown): Promise<T> {
   const headers: Record<string, string> = { 'X-Arai-CSRF': '1' };
   if (body !== undefined) headers['Content-Type'] = 'application/json';
   let res: Response;
@@ -28,6 +28,9 @@ const MESSAGES: Record<string, string> = {
   invalid_recovery: 'That username and recovery key do not match.',
   bot_check_failed: 'The automated-signup check failed. Reload the page and try again.',
   network_error: 'Arai could not be reached. Check your connection and try again.',
+  project_limit: 'You have reached the maximum number of projects.',
+  forbidden: 'You do not have permission to do that in this project.',
+  not_found: 'That project does not exist or you no longer have access to it.',
   vault_unlock_failed: 'Signed in, but your encryption keys could not be unlocked. Try again.',
 };
 

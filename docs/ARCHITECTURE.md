@@ -227,3 +227,11 @@ ticket from `/api/realtime/ticket` (cookie-authenticated), validated by the DO.
   emails are unique only once verified (partial unique index) so unverified
   addresses can't be squatted or enumerated; password reset works without
   email via the recovery key (`/api/auth/recover/challenge` + `/recover`).
+- **ADR-010 Client-generated project ids; signed key grants.** (2026-11-01)
+  The browser generates each project's 128-bit id so it can be bound into the
+  metadata AEAD context (`project/<id>/meta`) before the first request. Every
+  wrapped project key carries the granter's Ed25519 signature over
+  (scope, id, key version, recipient, hash of sealed box); clients verify it
+  before use and verify their own grants against the locally held signing key.
+  Outsiders get 404 for any project (existence never leaks); members lacking
+  a role get 403.

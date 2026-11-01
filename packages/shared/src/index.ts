@@ -7,15 +7,8 @@ export const email = z.string().trim().toLowerCase().max(254).email('invalid_ema
 /** Username or email used to sign in. */
 export const identifier = z.string().trim().min(3).max(254);
 
-/** Base64url (no padding) of exactly `bytes` bytes, or a range. */
-export const b64 = (min: number, max = min) =>
-  z
-    .string()
-    .regex(/^[A-Za-z0-9_-]+$/, 'invalid_base64url')
-    .refine((s) => {
-      const n = Math.floor((s.length * 3) / 4);
-      return n >= min && n <= max;
-    }, 'invalid_length');
+export { b64 } from './encoding';
+import { b64 } from './encoding';
 
 export const kdfParams = z.object({
   alg: z.literal('argon2id13'),
@@ -118,3 +111,4 @@ export interface VaultBlobs {
   encPrivateKeys: string;
 }
 export * from './ambient';
+export * from './projects';

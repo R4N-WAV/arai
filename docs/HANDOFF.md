@@ -17,10 +17,12 @@
 - Tests: `npm test` (crypto + Workers-runtime API). Browser E2E: build web, `wrangler dev` (run in background), `NODE_PATH=$(npm root -g) node apps/web/e2e/auth-flow.mjs`.
 
 ## Next concrete tasks
-0. Design system is implemented (docs/DESIGN_SYSTEM.md). When projects exist (Phase 2), call `useAmbient().setSources(coverHexes)` from the Library/Project pages with each project's dominant cover colour (extract client-side from the decrypted artwork; store it inside the encrypted project metadata, never in plaintext). Respect the "not AI-looking" rules in DESIGN_SYSTEM.md.
-1. Finish Phase 1 leftovers (small): signed-in password change (re-wrap ASK, revoke other sessions), username change (re-derive username path; needs password), ESLint, axe checks in the E2E script, lazy-load `@arai/crypto` to shrink the main bundle.
-2. Phase 2 start — projects: migration 0002 (projects, project_members, project_keys, folders, tracks, track_versions, files per ARCHITECTURE §5); project CRUD with `enc_meta` encrypted client-side under a project key sealed to the owner's X25519 key; Library page listing/creating projects; authorization helper `requireProjectRole()` with cross-user tests.
-3. Then R2: owner must enable R2 (needs a payment method on file, free tier) and create bucket `arai-files` + R2 API token → presigned upload/download (aws4fetch).
+1. **R2 (owner action first)**: Cloudflare dashboard → R2 → enable (needs a payment method on file; free tier 10 GB) → create bucket `arai-files` → *Manage R2 API tokens* → create token with Object Read & Write on that bucket → save Access Key ID / Secret as GitHub secrets `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` (deploy job must push them with `wrangler secret put`). Then add the R2 binding to wrangler.jsonc and bucket CORS for the workers.dev origin (PUT/GET, headers content-type, range).
+2. **Uploads**: migration 0003 (folders, tracks, track_versions, files per ARCHITECTURE §5); presigned multipart PUT via aws4fetch; client: magic-byte sniff → metadata (`music-metadata`) → waveform peaks → chunked XChaCha20 encryption (`@arai/crypto` chunks.ts, file key wrapped by project key) → upload with progress/cancel/retry; quota per user.
+3. **Player**: Service Worker that decrypts byte ranges for `<audio>`; queue, seek, volume, loop; waveform scrubbing; version history.
+4. Phase 1 leftovers: password/username change, ESLint, axe in E2E, lazy-load crypto.
+
+Local E2E note: registration is rate-limited (5/hour per network). Before re-running E2E locally many times, clear counters: `npx wrangler d1 execute arai --local --command "DELETE FROM rate_limits"` (in `apps/api`).
 
 ## Owner actions still required (not blocking local development)
 Deployment setup (README "Deployment": D1 database id, API token, account id into GitHub). Later: R2 enablement (Phase 2), Turnstile keys, domain + email provider, SMS provider. See `docs/REMAINING_TO_V1.md §2`.

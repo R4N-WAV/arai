@@ -21,3 +21,8 @@
 - Design: owner wants a stronger identity — ambient space with project colours flowing in like paint, animated. Mockups on the design canvas (see HANDOFF task 0); implementation waits for feedback. Discarded an earlier uncommitted "room" theme attempt.
 - Gotcha: changing the D1 database_id creates a fresh local DB — rerun `wrangler d1 migrations apply arai --local`.
 - Owner approved the ambient-space direction (after revisions: Tamil hand-lettered logo only; remove AI-looking details). Implemented: `scripts/build-logo.mjs` outlines அறை/அ from Kavivanar via HarfBuzz → `logoPaths.ts` + favicon; self-hosted fonts; `ambientPalette` in @arai/shared (4 tests; caught "bad" parsing as hex); `Ambient.tsx` background (empty = grain + faint அ; projects = ink-edged drifting glows); all pages restyled; dev-only `/dev/ambient-preview.html`. Vite `assetsInlineLimit: 0` so fonts never become `data:` URIs (CSP caught it). E2E 12/12 green.
+
+## Session 4 — 2026-11-01
+- Phase 2 start (no R2 yet): encrypted projects end to end. Migration 0002 (projects, project_members, project_keys); `@arai/crypto` signed key grants (3 tests); `@arai/shared` project schemas (b64 moved to `encoding.ts` to avoid an import cycle); `routes/projects.ts` with `requireProjectRole`; 11 API tests; web: ProjectsProvider (decrypt/verify), Library grid with typographic colour covers + filters, New project form (colour swatches, visibility with warning), Project page (edit, public/private confirm, typed-name delete). Ambient background now follows real project colours.
+- E2E `projects-flow.mjs` verifies the private name/description never appear in any request body.
+- Next: owner enables R2 → uploads, player, versions.
