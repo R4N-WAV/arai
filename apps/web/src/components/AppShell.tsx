@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router';
 import { useSession } from '../lib/session';
 import { IconDiscover, IconLibrary, IconMessages, IconSettings } from './Icons';
@@ -20,9 +20,36 @@ export function AppShell() {
   return <AppShellWith><Outlet /></AppShellWith>;
 }
 
+/**
+ * Measures the fixed bars at the bottom of the screen (player + tab bar,
+ * including the home-indicator inset) and exposes their height as
+ * `--chrome-bottom`, so page content can always scroll fully clear of them.
+ */
+function useBottomChrome(active: unknown) {
+  useEffect(() => {
+    const root = document.documentElement;
+    const measure = () => {
+      let top = window.innerHeight;
+      for (const el of document.querySelectorAll<HTMLElement>('.player, .tabbar')) {
+        const r = el.getBoundingClientRect();
+        if (r.height > 0 && r.top < top) top = r.top;
+      }
+      root.style.setProperty('--chrome-bottom', `${Math.max(0, Math.ceil(window.innerHeight - top))}px`);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    document.querySelectorAll('.player, .tabbar').forEach((el) => ro.observe(el));
+    window.addEventListener('resize', measure);
+    // The player slides in; measure again once it has settled.
+    const t = window.setTimeout(measure, 500);
+    return () => { ro.disconnect(); window.removeEventListener('resize', measure); window.clearTimeout(t); };
+  }, [active]);
+}
+
 export function AppShellWith({ children }: { children: ReactNode }) {
   const { user, signOut } = useSession();
   const { item } = usePlayer();
+  useBottomChrome(Boolean(item));
   const location = useLocation();
   const navigate = useNavigate();
   // Top-level tabs have no back button; everything deeper does (installed apps have no browser back).

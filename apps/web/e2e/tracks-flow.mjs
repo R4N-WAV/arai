@@ -174,6 +174,37 @@ if (await page.evaluate(() => document.documentElement.scrollWidth > window.inne
 await shot('t3-mobile');
 step('tracks and player fit a phone screen');
 
+// Nothing in the page may end up hidden behind the fixed player / tab bar.
+if (!(await page.locator('.player').count())) await page.locator('.track-row').first().click();
+await page.locator('.player').waitFor();
+const clearOfChrome = async () => {
+  await page.waitForTimeout(700);
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  await page.waitForTimeout(200);
+  return page.evaluate(() => {
+    const bars = [...document.querySelectorAll('.player, .tabbar')].map((e) => e.getBoundingClientRect()).filter((r) => r.height > 0);
+    const top = Math.min(...bars.map((r) => r.top));
+    let bottom = 0;
+    for (const el of document.querySelectorAll('.content *')) {
+      const r = el.getBoundingClientRect();
+      if (r.height > 0 && r.width > 0 && getComputedStyle(el).visibility !== 'hidden') bottom = Math.max(bottom, r.bottom);
+    }
+    return { top, bottom };
+  });
+};
+for (const [w, h] of [[375, 760], [1280, 800]]) {
+  await page.setViewportSize({ width: w, height: h });
+  for (const where of ['project', 'library']) {
+    if (where === 'library') await page.getByRole('link', { name: 'Library' }).filter({ visible: true }).first().click();
+    await page.locator('.content').waitFor();
+    const { top, bottom } = await clearOfChrome();
+    if (bottom > top + 0.5) throw new Error(`content hidden behind player at ${w}px on ${where}: ends ${bottom}, bar starts ${top}`);
+    await shot(`t4-bottom-${where}-${w}`);
+  }
+  await page.goBack();
+}
+step('scrolled to the bottom, all content sits above the player (phone + desktop)');
+
 await browser.close();
 if (problems.length) {
   console.error(problems.join('\n'));

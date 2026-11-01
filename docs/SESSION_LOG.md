@@ -57,3 +57,8 @@
 - Cause: the sticky mobile bar used `backdrop-filter` under the translucent status bar, and every scroll frame re-composited full-screen SVG displacement filters + live feTurbulence grain behind it; `overscroll-behavior: none` removed iOS rubber-band, so scrolling felt hard.
 - Fix: solid top bar with a short fade below it; native bounce restored; on phones/coarse pointers the ambient glows are plain CSS radial gradients (no SVG filters, normal blending) and the grain is a static 128 px tile (`scripts/build-grain.mjs`); ambient layer promoted to its own compositor layer (`contain: strict`); no backdrop blur on the player, tab bar or overlay backdrop on phones; momentum scrolling in overlays, menus and the project list.
 - Verified: typecheck, 86 unit/API tests, all 4 E2E flows; mobile screenshots at 390×844.
+
+## Session 11 — 2026-11-02
+- Owner: the player bar covered the end of the library (one project could not be fully read at the bottom). Cause: hard-coded bottom padding that ignored the home-indicator inset and the real player height.
+- Fix: `AppShell` measures the fixed bottom chrome (player + tab bar) with a ResizeObserver and sets `--chrome-bottom`; page content and mobile menu sheets are offset by it. Phone player made more compact (smaller thumb/buttons, 26 px waveform).
+- E2E (`tracks-flow`): scrolls to the bottom of the project page and the library at 375 and 1280 px and asserts every content element ends above the player/tab bar.
