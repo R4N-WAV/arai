@@ -3,6 +3,7 @@ import type { Capabilities, SessionUser } from '@arai/shared';
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 import { api, ApiError } from './api';
 import type { UnlockInfo } from './account';
+import { forgetAllTabs, rememberForTab, restoreForTab } from './tabvault';
 
 interface SessionState {
   loading: boolean;
@@ -32,11 +33,15 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       const s = await api<{ user: SessionUser; unlock: UnlockInfo }>('GET', '/auth/session');
       setUser(s.user);
       setUnlockInfo(s.unlock);
+      // Same tab reloaded? Restore keys without asking for the password again.
+      const restored = await restoreForTab(s.user.id, s.unlock.encPrivateKeys);
+      if (restored) setKeysState((k) => k ?? restored);
     } catch (e) {
       if (!(e instanceof ApiError) || e.status !== 401) console.warn('session check failed');
       setUser(null);
       setUnlockInfo(null);
       setKeysState(null);
+      if (e instanceof ApiError && e.status === 401) void forgetAllTabs();
     }
   }, []);
 
@@ -53,12 +58,17 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     setSignedIn: (u, k) => {
       setUser(u);
       setKeysState(k);
+      if (u && k) void rememberForTab(u.id, k);
       if (u) void refresh();
     },
-    setKeys: setKeysState,
+    setKeys: (k) => {
+      setKeysState(k);
+      if (user) void rememberForTab(user.id, k);
+    },
     refresh,
     signOut: async () => {
       await api('POST', '/auth/logout').catch(() => undefined);
+      await forgetAllTabs();
       setUser(null);
       setUnlockInfo(null);
       setKeysState(null);

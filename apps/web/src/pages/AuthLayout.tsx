@@ -1,11 +1,12 @@
 import type { ReactNode } from 'react';
+import { Link } from 'react-router';
 import { Logo } from '../components/Icons';
 
 export function AuthLayout({ title, children }: { title: string; children: ReactNode }) {
   return (
     <main className="auth">
       <div className="auth-panel">
-        <a className="brand" href="/"><Logo /> Arai</a>
+        <Link className="brand" to="/"><Logo /> Arai</Link>
         <h1>{title}</h1>
         {children}
       </div>

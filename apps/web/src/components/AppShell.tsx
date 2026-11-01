@@ -1,4 +1,4 @@
-import { NavLink, Outlet } from 'react-router';
+import { Link, NavLink, Outlet } from 'react-router';
 import { useSession } from '../lib/session';
 import { IconDiscover, IconLibrary, IconMessages, IconSettings, Logo } from './Icons';
 
@@ -21,7 +21,7 @@ export function AppShell() {
     <div className="shell">
       <a className="skip-link" href="#main">Skip to content</a>
       <nav className="sidebar" aria-label="Main">
-        <a className="brand" href="/"><Logo /> Arai</a>
+        <Link className="brand" to="/"><Logo /> Arai</Link>
         {links}
         <div className="sidebar-foot">
           <p className="muted" style={{ padding: '0 var(--s-3)', fontSize: 'var(--fs-sm)' }}>@{user?.username}</p>

@@ -88,6 +88,16 @@ Each device has its own X25519/Ed25519 key pair registered in `user_keys`;
 new devices are added after vault unlock (the ASK decrypts the account's
 long-term key, which re-seals project keys to the new device).
 
+### 3.5 Staying unlocked within a tab
+After sign-in the account secret key is encrypted with a fresh,
+**non-extractable** AES-GCM CryptoKey kept in IndexedDB; the ciphertext lives
+in `sessionStorage` (cleared when the tab closes) and is bound to the user id.
+A reload in the same tab restores the keys without the password; a new tab or a
+closed-and-reopened tab must unlock again. Sign-out (or a 401) deletes both.
+Nothing is sent to the server. Script running in the tab could already use
+the in-memory keys, so this adds no XSS exposure; the raw key bytes can never
+be read out of the browser (`apps/web/src/lib/tabvault.ts`).
+
 ## 4. Recovery strategy (no backdoor)
 
 - Forgotten password + recovery key → full restore, **no email needed**

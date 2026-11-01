@@ -14,3 +14,9 @@
 - CSRF origin check now compares with the request's own origin (no APP_ORIGIN config).
 - Tests: crypto 14, api 33, browser E2E 10 steps — all green. Deploy workflow added (inactive until secrets/variable set).
 - Gotcha: `pkill -f <pattern>` in a Bash call kills the calling shell if the pattern appears in the command; run `wrangler dev` with run_in_background instead.
+
+## Session 3 — 2026-11-01
+- Deployed: owner set up Cloudflare (D1 id committed in wrangler.jsonc; token + account id as GitHub secrets). Live at https://arai.ranuj-s.workers.dev (deploy run 41337995261, secrets auto-created).
+- Bug: clicking the logo did a full reload and required unlocking. Fixed: brand links use router `<Link>`; added tab-scoped unlock persistence (`lib/tabvault.ts`, SECURITY §3.5). E2E extended (logo click, reload, new tab) — 12 steps pass.
+- Design: owner wants a stronger identity — ambient space with project colours flowing in like paint, animated. Mockups on the design canvas (see HANDOFF task 0); implementation waits for feedback. Discarded an earlier uncommitted "room" theme attempt.
+- Gotcha: changing the D1 database_id creates a fresh local DB — rerun `wrangler d1 migrations apply arai --local`.
