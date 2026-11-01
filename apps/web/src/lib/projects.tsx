@@ -56,7 +56,7 @@ function cleanMeta(m: unknown): ProjectMeta | null {
   };
 }
 
-const publicPart = (m: ProjectMeta): PublicMeta => ({ name: m.name, description: m.description, genre: m.genre, tags: m.tags });
+const publicPart = (m: ProjectMeta): PublicMeta => ({ name: m.name, description: m.description, genre: m.genre, tags: m.tags, color: m.color });
 
 async function decode(dto: ProjectDto, keys: AccountKeys, myId: string): Promise<Project> {
   const base = { id: dto.id, role: dto.role, visibility: dto.visibility, keyVersion: dto.keyVersion, createdAt: dto.createdAt, updatedAt: dto.updatedAt };

@@ -1,4 +1,5 @@
-import { NavLink, Outlet } from 'react-router';
+import type { ReactNode } from 'react';
+import { Link, NavLink, Outlet } from 'react-router';
 import { useSession } from '../lib/session';
 import { IconDiscover, IconLibrary, IconMessages, IconSettings } from './Icons';
 import { HomeLink } from './Logo';
@@ -13,6 +14,10 @@ const NAV = [
 ];
 
 export function AppShell() {
+  return <AppShellWith><Outlet /></AppShellWith>;
+}
+
+export function AppShellWith({ children }: { children: ReactNode }) {
   const { user, signOut } = useSession();
   const { item } = usePlayer();
   const initial = user?.username.slice(0, 1).toUpperCase();
@@ -29,20 +34,24 @@ export function AppShell() {
         <HomeLink />
         <div className="nav-group">{links}</div>
         <div className="sidebar-foot">
-          <div className="user-chip">
+          <Link to={`/u/${user?.username ?? ''}`} className="user-chip">
             <span className="avatar" aria-hidden="true">{initial}</span>
             <span className="user-name">{user?.username}</span>
-          </div>
+            <span className="visually-hidden">, your profile</span>
+          </Link>
           <button type="button" className="btn btn-ghost btn-sm" onClick={() => void signOut()}>Sign out</button>
         </div>
       </nav>
       <div>
         <header className="mobile-bar">
           <HomeLink />
-          <button type="button" className="btn btn-ghost btn-sm" onClick={() => void signOut()}>Sign out</button>
+          <span className="form-actions">
+            <Link to={`/u/${user?.username ?? ''}`} className="avatar" aria-label="Your profile">{initial}</Link>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => void signOut()}>Sign out</button>
+          </span>
         </header>
         <main id="main" className="content" tabIndex={-1}>
-          <Outlet />
+          {children}
         </main>
       </div>
       <PlayerBar />

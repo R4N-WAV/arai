@@ -21,8 +21,9 @@ export function Library() {
         <section className="empty" aria-labelledby="empty-title">
           <h2 id="empty-title">Your space is quiet.</h2>
           <p className="voice">Start a project and its colours will begin to seep in.</p>
-          <p style={{ marginTop: 'var(--s-6)' }}>
+          <p className="form-actions" style={{ marginTop: 'var(--s-6)', justifyContent: 'center' }}>
             <Link to="/projects/new" className="btn">New project</Link>
+            <Link to="/import" className="btn btn-ghost">Import from Samply or Untitled</Link>
           </p>
         </section>
       </>
@@ -37,7 +38,10 @@ export function Library() {
           <h1>Library</h1>
           <span className="voice">{count(projects.length)}</span>
         </div>
-        <Link to="/projects/new" className="btn">New project</Link>
+        <span className="form-actions">
+          <Link to="/import" className="btn btn-ghost">Import</Link>
+          <Link to="/projects/new" className="btn">New project</Link>
+        </span>
       </header>
       {error && <Notice kind="error">{error}</Notice>}
       <div className="filters" role="group" aria-label="Show projects">

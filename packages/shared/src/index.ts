@@ -113,3 +113,4 @@ export interface VaultBlobs {
 export * from './ambient';
 export * from './projects';
 export * from './tracks';
+export * from './profiles';

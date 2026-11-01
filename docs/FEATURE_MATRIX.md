@@ -64,13 +64,14 @@ Arai status: `planned` · `in progress` · `done` · `blocked (reason)`.
 
 | Feature | Untitled | Samply | Arai phase | Arai status |
 |---|---|---|---|---|
-| Public profile | ◐ | — | 4 | planned |
+| Public profile | ◐ | — | 4 | done (picture, header, bio, links, public projects); listening from profile planned |
 | Friends / following | — | — | 4 | planned |
 | Discovery | — | — | 4 | planned (public only) |
 | Direct messages / groups | — | — | 5 | planned (E2EE) |
 | Listener analytics | ✅ | ◐ paid "insights" | 6 | planned, privacy-preserving |
 | End-to-end / zero-access encryption | — (claims "Dropbox-level" encryption, i.e. server-side) | — | 3/5 | planned — **Arai differentiator** |
 | Public API | ? | ✅ | — | post-V1 |
+| Import library from other services | — | — | 2 | done — from downloaded folders/ZIPs (no public export API on either service) |
 | Native apps | ✅ iOS/desktop | ✅ iOS | — | out of scope (web only, installable PWA) |
 
 ## Notes

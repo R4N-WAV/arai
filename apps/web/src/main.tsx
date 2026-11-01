@@ -2,12 +2,15 @@ import { StrictMode, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router';
 import { AmbientProvider } from './components/Ambient';
-import { AppShell } from './components/AppShell';
+import { AppShell, AppShellWith } from './components/AppShell';
 import { SessionProvider, useSession } from './lib/session';
 import { PlayerProvider } from './lib/player';
 import { ProjectsProvider } from './lib/projects';
 import { Library, NotBuilt } from './pages/Library';
 import { NewProject } from './pages/NewProject';
+import { EditProfile } from './pages/EditProfile';
+import { ImportPage } from './pages/Import';
+import { ProfilePage, PublicProfilePage } from './pages/Profile';
 import { ProjectPage } from './pages/Project';
 import { Recover } from './pages/Recover';
 import { Register } from './pages/Register';
@@ -22,6 +25,22 @@ function RequireAuth({ children }: { children: ReactNode }) {
   if (!user) return <Navigate to="/signin" replace />;
   if (!keys) return <Unlock />;
   return <>{children}</>;
+}
+
+function ProfileRoute() {
+  const { loading, user, keys } = useSession();
+  if (loading) return <p className="loading" role="status">Loading…</p>;
+  if (!user) return <PublicProfilePage />;
+  if (!keys) return <Unlock />;
+  return (
+    <ProjectsProvider>
+      <PlayerProvider>
+        <AppShellWith>
+          <ProfilePage />
+        </AppShellWith>
+      </PlayerProvider>
+    </ProjectsProvider>
+  );
 }
 
 function GuestOnly({ children }: { children: ReactNode }) {
@@ -46,7 +65,10 @@ createRoot(document.getElementById('root')!).render(
             <Route path="discover" element={<NotBuilt title="Discover" />} />
             <Route path="messages" element={<NotBuilt title="Messages" />} />
             <Route path="settings" element={<Settings />} />
+            <Route path="profile/edit" element={<EditProfile />} />
+            <Route path="import" element={<ImportPage />} />
           </Route>
+          <Route path="/u/:username" element={<ProfileRoute />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>

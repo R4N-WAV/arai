@@ -15,9 +15,11 @@ import { Mark } from './Logo';
 interface AmbientApi {
   /** Cover colours (hex) of the projects currently in view. */
   setSources: (hexes: string[]) => void;
+  /** Temporarily show other colours (e.g. someone's public profile); null restores. */
+  setOverride: (hexes: string[] | null) => void;
 }
 
-const Ctx = createContext<AmbientApi>({ setSources: () => undefined });
+const Ctx = createContext<AmbientApi>({ setSources: () => undefined, setOverride: () => undefined });
 export const useAmbient = () => useContext(Ctx);
 
 interface Shown extends Glow {
@@ -27,10 +29,11 @@ interface Shown extends Glow {
 
 export function AmbientProvider({ children }: { children: ReactNode }) {
   const [sources, setSources] = useState<string[]>([]);
-  const api = useMemo(() => ({ setSources }), []);
+  const [override, setOverride] = useState<string[] | null>(null);
+  const api = useMemo(() => ({ setSources, setOverride }), []);
   return (
     <Ctx.Provider value={api}>
-      <AmbientBackground hexes={sources} />
+      <AmbientBackground hexes={override ?? sources} />
       {children}
     </Ctx.Provider>
   );

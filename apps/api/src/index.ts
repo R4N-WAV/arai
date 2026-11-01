@@ -6,6 +6,7 @@ import { originGuard, securityHeaders } from './lib/security.js';
 import auth from './routes/auth.js';
 import projects from './routes/projects.js';
 import tracks from './routes/tracks.js';
+import profiles from './routes/profiles.js';
 export { FileStore } from './filestore.js';
 
 const app = new Hono<AppBindings>();
@@ -19,7 +20,10 @@ app.use('/api/*', originGuard);
 const jsonLimit = bodyLimit({ maxSize: 64 * 1024, onError: (c) => c.json({ error: 'payload_too_large' }, 413) });
 const chunkLimit = bodyLimit({ maxSize: 1024 * 1024 + 64, onError: (c) => c.json({ error: 'payload_too_large' }, 413) });
 // Encrypted audio chunks are the only bodies allowed above 64 KB (1 MiB + AEAD overhead).
-app.use('/api/*', (c, next) => (c.req.method === 'PUT' && /^\/api\/files\/[a-z2-7]{26}\/chunks\/\d+$/.test(c.req.path) ? chunkLimit(c, next) : jsonLimit(c, next)));
+// Encrypted audio chunks and profile images are the only bodies allowed above 64 KB.
+const isBinaryUpload = (method: string, path: string) =>
+  method === 'PUT' && (/^\/api\/files\/[a-z2-7]{26}\/chunks\/\d+$/.test(path) || /^\/api\/account\/profile\/(avatar|banner)$/.test(path));
+app.use('/api/*', (c, next) => (isBinaryUpload(c.req.method, c.req.path) ? chunkLimit(c, next) : jsonLimit(c, next)));
 
 app.get('/api/health', async (c) => {
   const db = await c.env.DB.prepare('SELECT 1 AS ok').first<{ ok: number }>();
@@ -29,6 +33,7 @@ app.get('/api/health', async (c) => {
 app.route('/api', auth);
 app.route('/api', projects);
 app.route('/api', tracks);
+app.route('/api', profiles);
 
 app.notFound((c) => c.json({ error: 'not_found' }, 404));
 

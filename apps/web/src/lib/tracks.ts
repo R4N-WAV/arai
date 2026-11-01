@@ -156,6 +156,7 @@ export class UploadJob {
     readonly onChange: (job: UploadJob) => void,
     readonly existingTrack: Track | null = null,
     readonly notes = '',
+    readonly title: string | null = null,
   ) {}
 
   get name() {
@@ -237,7 +238,7 @@ export class UploadJob {
         dto = (await api<{ track: TrackDto }>('POST', `/tracks/${this.existingTrack.id}/versions`, { id: versionId, fileId, encMeta })).track;
       } else {
         const trackId = newId();
-        const title = this.file.name.replace(/\.[^.]+$/, '').slice(0, 200) || 'Untitled track';
+        const title = (this.title ?? this.file.name.replace(/\.[^.]+$/, '')).slice(0, 200) || 'Untitled track';
         dto = (
           await api<{ track: TrackDto }>('POST', `/projects/${this.project.id}/tracks`, {
             id: trackId,

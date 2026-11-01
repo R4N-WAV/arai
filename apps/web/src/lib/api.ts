@@ -5,7 +5,7 @@ export class ApiError extends Error {
   }
 }
 
-export async function api<T>(method: 'GET' | 'POST' | 'PATCH' | 'DELETE', path: string, body?: unknown): Promise<T> {
+export async function api<T>(method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE', path: string, body?: unknown): Promise<T> {
   const headers: Record<string, string> = { 'X-Arai-CSRF': '1' };
   if (body !== undefined) headers['Content-Type'] = 'application/json';
   let res: Response;
@@ -26,6 +26,9 @@ const MESSAGES: Record<string, string> = {
   invalid_request: 'Some details are not valid. Check the form and try again.',
   account_unavailable: 'This account is suspended or unavailable.',
   invalid_recovery: 'That username and recovery key do not match.',
+  image_too_large: 'That image is too large.',
+  unsupported_image: 'That file is not a supported image.',
+  image_dimensions: 'That image is too large in pixels.',
   bot_check_failed: 'The automated-signup check failed. Reload the page and try again.',
   network_error: 'Arai could not be reached. Check your connection and try again.',
   project_limit: 'You have reached the maximum number of projects.',

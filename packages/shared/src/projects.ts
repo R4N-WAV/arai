@@ -14,11 +14,13 @@ export const publicMeta = z.object({
   description: z.string().max(2000).default(''),
   genre: z.string().max(60).default(''),
   tags: z.array(z.string().trim().min(1).max(30)).max(10).default([]),
+  /** Cover colour, shown on public profiles. */
+  color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
 });
 export type PublicMeta = z.infer<typeof publicMeta>;
 
 /** What lives inside enc_meta (validated client-side after decryption). */
-export interface ProjectMeta extends PublicMeta {
+export interface ProjectMeta extends Omit<PublicMeta, 'color'> {
   /** Cover colour (hex). Drives the ambient background. */
   color: string;
 }

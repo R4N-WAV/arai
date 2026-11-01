@@ -113,6 +113,15 @@ Format checks (magic bytes) run in the browser because the server only sees
 ciphertext; the E2E test asserts no uploaded chunk contains a WAV header.
 CSP `connect-src` allows `blob:` (same-origin object URLs only).
 
+### 3.7 Public profiles and import (implemented)
+Profile images: client re-encode (metadata stripped), server checks real
+format, byte size and pixel dimensions; served with `nosniff`,
+`Content-Disposition: inline`, versioned immutable URLs. Profile links:
+https only, no userinfo, `rel=noopener noreferrer nofollow ugc`. Only
+projects explicitly set public appear in profile responses (tested).
+Import never contacts Samply/Untitled and never asks for their passwords;
+files are parsed and encrypted locally.
+
 ## 4. Recovery strategy (no backdoor)
 
 - Forgotten password + recovery key → full restore, **no email needed**

@@ -1,6 +1,6 @@
 # Project Status — authoritative checklist
 
-Last updated: 2026-11-01 (session 5). Tests: 76 passing (crypto 17, shared 4, api 55) + browser E2E: `auth-flow.mjs` (12), `projects-flow.mjs` (8), `tracks-flow.mjs` (12). `[x]` done & tested · `[~]` in progress · `[ ]` not started · `[!]` blocked.
+Last updated: 2026-11-01 (session 6). Tests: 86 passing (crypto 17, shared 4, api 60, web 5) + browser E2E: `auth-flow` (12), `projects-flow` (8), `tracks-flow` (12), `profile-import-flow` (6). `[x]` done & tested · `[~]` in progress · `[ ]` not started · `[!]` blocked.
 
 ## Phase 0 — Research & architecture
 - [x] Repository inspected (empty, greenfield)
@@ -46,6 +46,8 @@ Last updated: 2026-11-01 (session 5). Tests: 76 passing (crypto 17, shared 4, ap
 - [ ] Artwork upload (and cover colour from artwork), track rename UI, reorder tracks (+ keyboard alternative)
 - [ ] Service-Worker range streaming (start playback before full download), gapless
 - [ ] Version comparison (A/B), search (client-side)
+- [x] Library import from Samply / Untitled downloads (ADR-012): folder, ZIP or files; projects per folder, versions grouped by name markers, colour from cover art; review/rename before import; quota-aware; runs through the encrypted upload pipeline (unit tests + E2E)
+- [x] Layout centred on wide screens (content column, auth, empty states)
 
 ## Phase 3 — Privacy & collaboration
 - [ ] Project key envelopes, member key grants, pending grants
@@ -55,7 +57,8 @@ Last updated: 2026-11-01 (session 5). Tests: 76 passing (crypto 17, shared 4, ap
 - [ ] Publish/unpublish (public bucket copies)
 
 ## Phase 4 — Social
-- [ ] Profiles + images, links · [ ] follows · [ ] friends · [ ] blocks/reports · [ ] discovery & FTS · [ ] notifications
+- [x] Profiles (pulled forward at owner's request): display name, bio, location, up to 8 https links, profile picture + header (client re-encode, server magic-byte/size/dimension checks), public view for signed-out visitors, glow from public project colours (migration 0004; 5 API tests; E2E)
+- [ ] Listening from profiles (needs public audio copies) · [ ] follows · [ ] friends · [ ] blocks/reports · [ ] discovery & FTS · [ ] notifications
 
 ## Phase 5 — Messaging
 - [ ] ADR-005 final decision · [ ] DMs/groups/project chats · [ ] DO realtime · [ ] attachments · [ ] reactions/edits/deletes/receipts/typing · [ ] GIFs (configurable) · [ ] message requests

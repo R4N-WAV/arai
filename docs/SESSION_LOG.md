@@ -33,3 +33,9 @@
 - Web: `lib/audio.ts` (magic-byte sniff, Web Audio analysis), `lib/tracks.ts` (UploadJob with resume/retry, decrypt-to-blob playback), `lib/player.tsx` + PlayerBar + scrubbable Waveform, TracksSection (drop zone, uploads, track list, versions, delete).
 - E2E `tracks-flow.mjs`: ciphertext-only chunks, byte-identical decrypt, keyboard seek, speed, versions, fake-file rejection, mobile fit. CSP `connect-src` gained `blob:`.
 - Fixed during testing: waveform overflow in the player; player now clears when its track is deleted.
+
+## Session 6 — 2026-11-01
+- Owner requests: centre the layout; import from Samply/Untitled; profiles with pictures and headers now.
+- Layout: content column, auth panel, empty states and the faint அ are centred (E2E asserts equal side space at 1440 px).
+- Profiles: migration 0004, `routes/profiles.ts` (public GET, own edit, images with magic-byte + dimension checks in `lib/images.ts`), web ProfileView / EditProfile / public visitor page, ambient glow from public project colours. Bug caught by E2E: D1 returns BLOBs as number arrays → images served empty; fixed + test now checks bytes. Second bug: uploading a picture reset unsaved form text; fixed.
+- Import (ADR-012): `lib/importer.ts` (folder/drag/ZIP via fflate, version grouping, cover colour) + Import page (review, rename, progress) + 5 unit tests + E2E.

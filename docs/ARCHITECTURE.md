@@ -247,3 +247,19 @@ ticket from `/api/realtime/ticket` (cookie-authenticated), validated by the DO.
   file. Playback currently downloads + decrypts the whole file into a blob URL
   (byte-exact, lossless); Service-Worker range streaming is a later
   optimisation. Storage sits behind `FileStore` so R2/B2 can replace it later.
+- **ADR-012 Library import from downloads, not account linking.** (2026-11-01)
+  Untitled has no public API and Samply's API could not be verified for
+  third-party bulk export (and would require handing Arai a session/API key,
+  plus server-side fetching that would see plaintext). Import therefore reads
+  what users download from those services (folders, ZIPs via fflate streaming
+  in the page — no workers, CSP-safe) entirely in the browser
+  (`apps/web/src/lib/importer.ts`), plans projects/tracks/versions, lets the
+  user review and rename, then uses the normal encrypted upload pipeline. If
+  either service later offers an official export API, an adapter can feed the
+  same plan.
+- **ADR-013 Profiles are public data in D1.** Profile text and images are
+  public by design and stored unencrypted (images ≤300 KB / ≤900 KB in D1).
+  Images are re-encoded client-side (strips EXIF/GPS) and validated
+  server-side (magic bytes, size, pixel dimensions ≤512 / ≤1800 to stop
+  decompression bombs). Links must be https without credentials and render
+  with `rel="noopener noreferrer nofollow ugc"`.
