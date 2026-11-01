@@ -1,7 +1,7 @@
 /**
- * Library import (Samply, Untitled or any folder of audio).
+ * Library import from other platforms (or any folder of audio).
  *
- * Neither service offers a public way for another app to copy your library,
+ * Music platforms generally offer no public way for another app to copy a library,
  * so import works from what they let you download: folders or ZIP files.
  * Everything here runs in the browser: files are read locally, grouped into
  * projects → tracks → versions, then encrypted and uploaded through the
@@ -152,7 +152,7 @@ export function buildPlan(sources: SourceFile[]): ImportPlan {
   const skipped = files.filter((s) => !AUDIO.test(s.file.name) && !IMAGE.test(s.file.name)).map((s) => s.path.join('/'));
   const useful = files.filter((s) => AUDIO.test(s.file.name) || IMAGE.test(s.file.name));
 
-  // Strip folders every file shares (e.g. the chosen "Samply export" folder).
+  // Strip folders every file shares (e.g. the chosen export folder).
   const dirs = useful.map((s) => s.path.slice(0, -1));
   let common = 0;
   while (dirs.length && dirs.every((d) => d.length > common + 1 && d[common] === dirs[0]![common])) common++;

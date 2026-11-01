@@ -1,10 +1,11 @@
 import type { ReactNode } from 'react';
-import { Link, NavLink, Outlet } from 'react-router';
+import { Link, NavLink, Outlet, useLocation } from 'react-router';
 import { useSession } from '../lib/session';
 import { IconDiscover, IconLibrary, IconMessages, IconSettings } from './Icons';
 import { HomeLink } from './Logo';
 import { PlayerBar } from './PlayerBar';
 import { usePlayer } from '../lib/player';
+import { useProjects } from '../lib/projects';
 
 const NAV = [
   { to: '/', label: 'Library', icon: IconLibrary, end: true },
@@ -20,9 +21,11 @@ export function AppShell() {
 export function AppShellWith({ children }: { children: ReactNode }) {
   const { user, signOut } = useSession();
   const { item } = usePlayer();
+  const location = useLocation();
+  const { projects } = useProjects();
   const initial = user?.username.slice(0, 1).toUpperCase();
   const links = NAV.map(({ to, label, icon: Icon, end }) => (
-    <NavLink key={to} to={to} end={end} className="nav-link">
+    <NavLink key={to} to={to} end={end} className="nav-link" viewTransition>
       <Icon />
       <span>{label}</span>
     </NavLink>
@@ -33,6 +36,21 @@ export function AppShellWith({ children }: { children: ReactNode }) {
       <nav className="sidebar" aria-label="Main">
         <HomeLink />
         <div className="nav-group">{links}</div>
+        {projects && projects.length > 0 && (
+          <div className="nav-projects">
+            <p className="nav-heading">Your projects</p>
+            <ul>
+              {projects.slice(0, 14).map((p) => (
+                <li key={p.id}>
+                  <NavLink to={`/projects/${p.id}`} className="nav-project" viewTransition>
+                    <span className="nav-swatch" style={{ background: p.meta?.color ?? '#555' }} aria-hidden="true" />
+                    <span className="nav-project-name">{p.meta?.name ?? 'Locked project'}</span>
+                  </NavLink>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         <div className="sidebar-foot">
           <Link to={`/u/${user?.username ?? ''}`} className="user-chip">
             <span className="avatar" aria-hidden="true">{initial}</span>
@@ -50,7 +68,7 @@ export function AppShellWith({ children }: { children: ReactNode }) {
             <button type="button" className="btn btn-ghost btn-sm" onClick={() => void signOut()}>Sign out</button>
           </span>
         </header>
-        <main id="main" className="content" tabIndex={-1}>
+        <main id="main" className="content" tabIndex={-1} key={location.pathname}>
           {children}
         </main>
       </div>

@@ -2,10 +2,12 @@ import { IMAGE_LIMITS, linkService, type ProfileDto } from '@arai/shared';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router';
 import { Field } from '../components/Field';
+import { ImageCropper } from '../components/ImageCropper';
+import { Modal } from '../components/Modal';
 import { Avatar, imageUrl } from '../components/ProfileView';
 import { Notice } from '../components/Unavailable';
 import { api, errorMessage } from '../lib/api';
-import { prepareImage, uploadImage } from '../lib/images';
+import { uploadImage } from '../lib/images';
 
 const IMAGE_ERRORS: Record<string, string> = {
   unsupported_image: 'That file is not an image this browser can read.',
@@ -25,6 +27,7 @@ export function EditProfile() {
   const [status, setStatus] = useState<string | null>(null);
   const avatarInput = useRef<HTMLInputElement>(null);
   const bannerInput = useRef<HTMLInputElement>(null);
+  const [crop, setCrop] = useState<{ kind: 'avatar' | 'banner'; file: File } | null>(null);
 
   const apply = (p: ProfileDto) => {
     setProfile(p);
@@ -38,13 +41,19 @@ export function EditProfile() {
     api<{ profile: ProfileDto }>('GET', '/account/profile').then((r) => apply(r.profile)).catch((e) => setError(errorMessage(e)));
   }, []);
 
-  async function image(kind: 'avatar' | 'banner', file: File | undefined) {
+  function pick(kind: 'avatar' | 'banner', file: File | undefined) {
     if (!file) return;
+    if (!file.type.startsWith('image/')) return setError(IMAGE_ERRORS.unsupported_image!);
+    setError(null);
+    setCrop({ kind, file });
+  }
+
+  async function image(kind: 'avatar' | 'banner', blob: Blob) {
+    setCrop(null);
     setBusy(kind);
     setError(null);
     try {
-      const box = kind === 'avatar' ? { w: IMAGE_LIMITS.avatar.px, h: IMAGE_LIMITS.avatar.px } : { w: IMAGE_LIMITS.banner.px, h: 600 };
-      await uploadImage(kind, await prepareImage(file, box, IMAGE_LIMITS[kind].bytes));
+      await uploadImage(kind, blob);
       // Refresh only the pictures: never discard text the user has typed but not saved.
       const fresh = (await api<{ profile: ProfileDto }>('GET', '/account/profile')).profile;
       setProfile((p) => (p ? { ...p, avatar: fresh.avatar, banner: fresh.banner } : fresh));
@@ -117,8 +126,21 @@ export function EditProfile() {
           </button>
           {profile.avatar && <button type="button" className="btn btn-ghost btn-sm" onClick={() => void removeImage('avatar')}>Remove picture</button>}
         </div>
-        <input ref={avatarInput} type="file" accept="image/*" hidden onChange={(e) => (void image('avatar', e.target.files?.[0]), (e.target.value = ''))} />
-        <input ref={bannerInput} type="file" accept="image/*" hidden onChange={(e) => (void image('banner', e.target.files?.[0]), (e.target.value = ''))} />
+        <input ref={avatarInput} type="file" accept="image/*" hidden onChange={(e) => (pick('avatar', e.target.files?.[0]), (e.target.value = ''))} />
+        <input ref={bannerInput} type="file" accept="image/*" hidden onChange={(e) => (pick('banner', e.target.files?.[0]), (e.target.value = ''))} />
+        <Modal open={!!crop} onClose={() => setCrop(null)} title={crop?.kind === 'banner' ? 'Position your header' : 'Position your picture'} wide={crop?.kind === 'banner'}>
+          {crop && (
+            <ImageCropper
+              file={crop.file}
+              aspect={crop.kind === 'avatar' ? 1 : 3}
+              round={crop.kind === 'avatar'}
+              output={crop.kind === 'avatar' ? { w: IMAGE_LIMITS.avatar.px, h: IMAGE_LIMITS.avatar.px } : { w: IMAGE_LIMITS.banner.px, h: 600 }}
+              maxBytes={IMAGE_LIMITS[crop.kind].bytes}
+              onCancel={() => setCrop(null)}
+              onDone={(b) => void image(crop.kind, b)}
+            />
+          )}
+        </Modal>
         <p className="row-sub" style={{ marginTop: 'var(--s-3)' }}>Pictures are resized in your browser and hidden data such as location is removed before upload.</p>
       </section>
 

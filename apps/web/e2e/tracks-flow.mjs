@@ -60,7 +60,7 @@ await page.getByRole('button', { name: 'Create project' }).click();
 await page.getByRole('heading', { name: 'Night Sessions' }).waitFor();
 step('signed up and created a project');
 
-await page.locator('.dropzone input[type=file]').setInputFiles([glass, undertow]);
+await page.locator('input[type=file][multiple]').setInputFiles([glass, undertow]);
 await page.getByText('Glass Hours', { exact: true }).waitFor({ timeout: 60000 });
 await page.getByText('Undertow', { exact: true }).waitFor({ timeout: 60000 });
 await page.locator('.track', { hasText: 'Glass Hours' }).getByText('0:30').waitFor();
@@ -70,10 +70,23 @@ for (const b of chunkBodies) if (!b || b.includes(Buffer.from('RIFF')) || b.incl
 step(`all ${chunkBodies.length} uploaded chunks were ciphertext (no WAV headers)`);
 await shot('t1-tracks');
 
-await page.getByRole('button', { name: 'Play Glass Hours' }).click();
-await page.locator('.player').getByText('Glass Hours').waitFor();
+await page.reload(); // let the streaming service worker take control of the page
+await page.locator('.track-title', { hasText: 'Glass Hours' }).waitFor();
+if (!(await page.evaluate(() => !!navigator.serviceWorker.controller))) throw new Error('streaming service worker is not controlling the page');
+const t0 = Date.now();
+await page.locator('.track', { hasText: 'Glass Hours' }).locator('.track-main').click(); // the row itself plays
+await page.waitForFunction(() => (document.querySelector('audio')?.currentTime ?? 0) > 0.05, null, { timeout: 30000 });
+const startMs = Date.now() - t0;
+if (!(await page.evaluate(() => document.querySelector('audio').src.includes('/_stream/')))) throw new Error('playback did not use streaming');
+if (startMs > 1500) throw new Error(`playback took ${startMs} ms to start`);
+step(`clicking the row streams and starts sound in ${startMs} ms`);
 await page.waitForFunction(() => (document.querySelector('audio')?.currentTime ?? 0) > 0.5, null, { timeout: 30000 });
-step('decrypted and playing (audio clock advancing)');
+await page.locator('h1').click();
+await page.keyboard.press(' ');
+await page.waitForFunction(() => document.querySelector('audio').paused);
+await page.keyboard.press(' ');
+await page.waitForFunction(() => !document.querySelector('audio').paused);
+step('Space pauses and resumes');
 const playedHash = await page.evaluate(async () => {
   const blob = await (await fetch(document.querySelector('audio').src)).arrayBuffer();
   const d = await crypto.subtle.digest('SHA-256', blob);
@@ -92,21 +105,51 @@ step('playback speed changes');
 await shot('t2-playing');
 
 const first = page.locator('.track', { hasText: 'Glass Hours' });
-await first.getByRole('button', { name: /Versions/ }).click();
+await first.getByRole('button', { name: /Show versions/ }).click();
 const [chooser] = await Promise.all([page.waitForEvent('filechooser'), first.getByRole('button', { name: 'Upload new version' }).click()]);
 await chooser.setFiles(glass2);
 await first.getByRole('button', { name: 'Play version 2' }).waitFor({ timeout: 60000 });
-await first.getByText('v2 ·').waitFor();
+await first.getByText('LUFS').first().waitFor();
+await first.getByText('44.1 kHz').first().waitFor();
+await first.getByText('16-bit').first().waitFor();
+step('version insights show loudness, sample rate and bit depth');
+await first.locator('.version-badge', { hasText: 'v2' }).waitFor();
 step('new version uploaded and became current');
 await first.getByRole('button', { name: /Make current/ }).click();
-await first.getByText('v1 ·').waitFor();
+await first.locator('.version-badge', { hasText: 'v1' }).waitFor();
 step('restored version 1 as current; version 2 kept in history');
 
-await page.locator('.dropzone input[type=file]').setInputFiles(fake);
-await page.getByText('not a supported audio format').waitFor();
-step('a fake .wav (text) is rejected by content sniffing');
+// reorder: keyboard on the handle, then drag with the mouse; order survives reload
+const order = async () => (await page.locator('.track-title').allTextContents()).join(' | ');
+const before = await order();
+await page.locator('.track', { hasText: 'Undertow' }).locator('.drag-handle').focus();
+await page.keyboard.press(Number(before.indexOf('Undertow') > 0) ? 'ArrowUp' : 'ArrowDown');
+await page.waitForFunction((b) => [...document.querySelectorAll('.track-title')].map((e) => e.textContent).join(' | ') !== b, before, { timeout: 5000 });
+const afterKey = await order();
+await page.waitForTimeout(400);
+await page.reload();
+await page.locator('.track-title').first().waitFor();
+if ((await order()) !== afterKey) throw new Error('keyboard reorder did not persist');
+await page.waitForTimeout(800); // let the rows finish their entrance animation
+const h1 = page.locator('.track').nth(0).locator('.drag-handle');
+const row2 = await page.locator('.track').nth(1).boundingBox();
+const hb = await h1.boundingBox();
+await page.mouse.move(hb.x + hb.width / 2, hb.y + hb.height / 2);
+await page.mouse.down();
+await page.mouse.move(hb.x + hb.width / 2, row2.y + row2.height / 2, { steps: 8 });
+await page.mouse.up();
+await page.waitForFunction((b) => [...document.querySelectorAll('.track-title')].map((e) => e.textContent).join(' | ') !== b, afterKey);
+step('tracks reorder by keyboard and by dragging; order persists');
 
-await first.getByRole('button', { name: 'Delete track…' }).click();
+await page.getByRole('button', { name: 'Add tracks' }).click();
+await page.getByRole('dialog', { name: 'Add tracks' }).getByText('Drop audio here').waitFor();
+await page.locator('input[type=file][multiple]').setInputFiles(fake);
+await page.getByText('not a supported audio format').waitFor();
+await page.keyboard.press('Escape');
+step('Add tracks overlay opens; a fake .wav (text) is rejected by content sniffing');
+
+await first.getByRole('button', { name: 'More for Glass Hours' }).click();
+await page.getByRole('menuitem', { name: 'Delete track…' }).click();
 await first.getByRole('button', { name: 'Delete', exact: true }).click();
 await page.locator('.track-title', { hasText: 'Glass Hours' }).waitFor({ state: 'detached' });
 step('track deleted');

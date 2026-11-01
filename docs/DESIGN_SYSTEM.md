@@ -75,6 +75,19 @@ merged, at most 5 glows; rendered with screen blending (tests in
 - `prefers-reduced-motion`: everything still.
 - Future: glows respond gently to playback level (Phase 2 player).
 
+## Interaction and motion (session 7)
+
+- Pages enter (view transitions + short rise); project covers fly between
+  library and project page (shared `view-transition-name`).
+- Overlays (`components/Modal.tsx`, native `<dialog>`) pop in and sink out;
+  on phones they slide up as sheets. Popover menus scale in from their button.
+- Lists cascade in; reorders glide (FLIP, `lib/flip.ts`).
+- Track rows: whole row plays; drag handle reorders (keyboard: arrows on the
+  handle); version badge opens versions + insights; ⋯ menu for actions.
+- Project header: meta line → title → owner → Play / Add tracks / Edit details,
+  inside a centred 820 px column (inspired by, not copied from, other
+  workspaces).
+
 ## Layout
 
 - Desktop ≥ 1024 px: transparent sidebar (logotype, nav, user) over the space;

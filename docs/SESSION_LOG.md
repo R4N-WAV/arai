@@ -39,3 +39,8 @@
 - Layout: content column, auth panel, empty states and the faint அ are centred (E2E asserts equal side space at 1440 px).
 - Profiles: migration 0004, `routes/profiles.ts` (public GET, own edit, images with magic-byte + dimension checks in `lib/images.ts`), web ProfileView / EditProfile / public visitor page, ambient glow from public project colours. Bug caught by E2E: D1 returns BLOBs as number arrays → images served empty; fixed + test now checks bytes. Second bug: uploading a picture reset unsaved form text; fixed.
 - Import (ADR-012): `lib/importer.ts` (folder/drag/ZIP via fflate, version grouping, cover colour) + Import page (review, rename, progress) + 5 unit tests + E2E.
+
+## Session 7 — 2026-11-01
+- Owner feedback round: cropping, neutral wording for other platforms, instant playback, detailed waveforms, drag reorder, no fingerprint, motion, keyboard media keys, project page with only Edit details / Add tracks (overlays), row click to play, version insights; auto-deploy; Samply screenshot as layout inspiration.
+- Built: streaming service worker (ADR-014), canvas waveform (peak+RMS), BS.1770 loudness + peak + bit depth, Modal/Menu/ImageCropper components, FLIP reorder, Media Session + shortcuts, compact project page + sidebar project list, view transitions and motion system; deploy on branch push (ADR-015).
+- Bugs found by tests: drag hit-test used animated boxes (order bounced back) → use offsetTop; duplicate dialog title ids mislabelled overlays → useId.

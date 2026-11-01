@@ -21,8 +21,13 @@ export async function prepareImage(file: File, box: { w: number; h: number }, ma
   canvas.height = h;
   canvas.getContext('2d')!.drawImage(bmp, (bmp.width - sw) / 2, (bmp.height - sh) / 2, sw, sh, 0, 0, w, h);
   bmp.close();
+  return encodeCanvas(canvas, maxBytes);
+}
+
+/** Encodes a canvas as WebP (JPEG fallback), stepping quality down to fit `maxBytes`. */
+export async function encodeCanvas(canvas: HTMLCanvasElement, maxBytes: number): Promise<Blob> {
   for (const type of ['image/webp', 'image/jpeg']) {
-    for (const q of [0.9, 0.8, 0.7, 0.55, 0.4]) {
+    for (const q of [0.92, 0.85, 0.75, 0.6, 0.45]) {
       const out = await new Promise<Blob | null>((r) => canvas.toBlob(r, type, q));
       if (out && out.type === type && out.size <= maxBytes) return out;
     }

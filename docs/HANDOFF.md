@@ -17,6 +17,7 @@
 - Tests: `npm test` (crypto + Workers-runtime API). Browser E2E: build web, `wrangler dev` (run in background), `NODE_PATH=$(npm root -g) node apps/web/e2e/auth-flow.mjs`.
 
 ## Next concrete tasks
+0. Deploys are automatic on push to this branch (ADR-015). Check the Deploy run after pushing.
 1. **Phase 3 — collaboration**: invite by username (look up their X25519/Ed25519 keys, show fingerprint), `createGrant` to wrap the project key for them, accept/decline invitations, roles UI (listener/editor/admin), remove member → rotate project key (new version, re-wrap file keys + metadata), pending grants for offline owners. Migration 0005 (invitations, pending_key_grants).
 2. **Time-coded comments** per version (encrypted bodies, replies, resolve), markers on the waveform.
 3. **Share links** (key in URL fragment, optional password, expiry, download/comment flags) and **public listening** (public audio copies) so profiles can play public projects.

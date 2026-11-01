@@ -122,6 +122,13 @@ projects explicitly set public appear in profile responses (tested).
 Import never contacts Samply/Untitled and never asks for their passwords;
 files are parsed and encrypted locally.
 
+### 3.8 Streaming service worker (implemented)
+`/sw.js` (scope `/`) decrypts audio for `<audio>` on the fly. File keys are
+handed over per stream via `postMessage` with a random token and held only
+in the worker's memory (bounded; cleared on sign-out); nothing is written to
+caches or storage. Only same-origin `/_stream/<token>` requests are handled;
+unknown tokens get 410 and the page falls back to in-memory decryption.
+
 ## 4. Recovery strategy (no backdoor)
 
 - Forgotten password + recovery key → full restore, **no email needed**
@@ -153,8 +160,10 @@ Zero-access encryption does **not** protect against:
 - malware or a compromised, unlocked device;
 - recordings/screenshots by authorised recipients;
 - copies downloaded before access was revoked;
-- a malicious server substituting public keys (MITM) — mitigated by key
-  fingerprints/safety numbers and key-change warnings, not eliminated;
+- a malicious server substituting public keys (MITM) — mitigated by signed
+  grants and key-change warnings (planned); the fingerprint UI was removed at
+  the owner's request (usernames are unique), so out-of-band verification is
+  not currently offered;
 - a malicious server serving modified JavaScript (inherent to web apps) —
   mitigated by open source, reproducible builds and CSP; not eliminated;
 - metadata analysis (who collaborates with whom, file sizes, timing).

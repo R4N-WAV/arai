@@ -3,6 +3,7 @@ import type { Capabilities, SessionUser } from '@arai/shared';
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 import { api, ApiError } from './api';
 import type { UnlockInfo } from './account';
+import { forgetStreams } from './stream';
 import { forgetAllTabs, rememberForTab, restoreForTab } from './tabvault';
 
 interface SessionState {
@@ -69,6 +70,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     signOut: async () => {
       await api('POST', '/auth/logout').catch(() => undefined);
       await forgetAllTabs();
+      await forgetStreams();
       setUser(null);
       setUnlockInfo(null);
       setKeysState(null);

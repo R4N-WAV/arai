@@ -1,6 +1,6 @@
 # Project Status — authoritative checklist
 
-Last updated: 2026-11-01 (session 6). Tests: 86 passing (crypto 17, shared 4, api 60, web 5) + browser E2E: `auth-flow` (12), `projects-flow` (8), `tracks-flow` (12), `profile-import-flow` (6). `[x]` done & tested · `[~]` in progress · `[ ]` not started · `[!]` blocked.
+Last updated: 2026-11-01 (session 7). Tests: 86 passing (crypto 17, shared 4, api 60, web 5) + browser E2E: `auth-flow` (11), `projects-flow` (9), `tracks-flow` (16), `profile-import-flow` (6). `[x]` done & tested · `[~]` in progress · `[ ]` not started · `[!]` blocked.
 
 ## Phase 0 — Research & architecture
 - [x] Repository inspected (empty, greenfield)
@@ -21,7 +21,7 @@ Last updated: 2026-11-01 (session 6). Tests: 86 passing (crypto 17, shared 4, ap
 - [x] Prelogin / register / login / logout / session API with enumeration parity, cookie hardening, expiry, new-device flag (tests)
 - [x] Rate limiting (per IP-HMAC + per account) + honeypot (tests); Turnstile adapter written, **not yet configured** (owner: add keys)
 - [x] Password reset with recovery key (email-less) + data-loss acknowledgement at signup (tests + E2E)
-- [x] Settings: sessions list/revoke/revoke-others, login history, key fingerprint (tests + E2E)
+- [x] Settings: sessions list/revoke/revoke-others, login history (key fingerprint UI removed at owner's request; see SECURITY §6)
 - [x] Web shell: tokens, desktop sidebar / mobile tab bar, sign in, register (recovery key step), unlock, recover, settings (E2E at 1280 & 375 px)
 - [x] Provider-gated features greyed out via `/api/config` (ADR-009)
 - [x] Deploy pipeline GitHub -> Cloudflare (`deploy.yml`) — **inactive until owner sets secrets/variable**
@@ -43,8 +43,15 @@ Last updated: 2026-11-01 (session 6). Tests: 86 passing (crypto 17, shared 4, ap
 - [x] Player: queue, play/pause, prev/next, scrubbable waveform (pointer + keyboard slider), volume, repeat, speed (pitch preserved); byte-exact lossless decrypt (E2E)
 - [x] Version history: append-only (DB trigger), upload new version, play any version, make current
 - [~] AIFF uploads keep the original but only play where the browser decodes AIFF (Safari); in-browser AIFF→WAV rewrap TODO
-- [ ] Artwork upload (and cover colour from artwork), track rename UI, reorder tracks (+ keyboard alternative)
-- [ ] Service-Worker range streaming (start playback before full download), gapless
+- [ ] Artwork upload (cropper ready; needs encrypted image files), track rename UI
+- [x] Service-Worker range streaming: playback starts after the first decrypted chunk (~1.4 s locally incl. key setup); next track pre-warmed; blob fallback (`src/sw.ts`, `lib/stream.ts`)
+- [x] Detailed canvas waveforms (1600 buckets, peak + RMS); loudness (BS.1770 LUFS), sample peak, bit depth in version insights
+- [x] Track reorder by drag (live FLIP) and keyboard on the handle; persisted; row click plays; ⋯ menu per track
+- [x] Keyboard media controls (Space/K, ←/→, Shift+←/→, ↑/↓, M, R) + Media Session (OS media keys)
+- [x] Project page: Play / Add tracks / Edit details; overlays for edit (incl. visibility + delete) and add tracks; sidebar project list
+- [x] Image scale-and-crop for profile picture and header (drag, zoom, pinch, keyboard)
+- [x] Motion: page view-transitions, shared cover transition, staggered lists, overlay/menu animations, tactile buttons (reduced-motion respected)
+- [ ] Gapless (sample-accurate) playback
 - [ ] Version comparison (A/B), search (client-side)
 - [x] Library import from Samply / Untitled downloads (ADR-012): folder, ZIP or files; projects per folder, versions grouped by name markers, colour from cover art; review/rename before import; quota-aware; runs through the encrypted upload pipeline (unit tests + E2E)
 - [x] Layout centred on wide screens (content column, auth, empty states)

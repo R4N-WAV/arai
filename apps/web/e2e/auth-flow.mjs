@@ -48,8 +48,7 @@ for (const name of ['Send verification email', 'Turn on']) {
   for (const b of await page.getByRole('button', { name }).all()) if (!(await b.isDisabled())) throw new Error(`${name} should be disabled`);
 }
 if ((await page.getByText('Not available yet').count()) < 3) throw new Error('expected greyed-out provider features');
-await page.locator('.fingerprint').filter({ hasText: /^[0-9a-f]{4} / }).waitFor();
-step('settings: email verification + email/SMS 2FA greyed out; fingerprint shown');
+step('settings: email verification + email/SMS 2FA greyed out');
 await shot('03-settings');
 
 await page.locator('.sidebar .home-link').click();

@@ -35,7 +35,7 @@ function wav(seconds, freq) {
 }
 const avatar = join(dir, 'me.png'); writeFileSync(avatar, png(900, 700, [180, 60, 40]));
 const banner = join(dir, 'wide.png'); writeFileSync(banner, png(1200, 400, [40, 90, 160]));
-const exportDir = join(dir, 'Samply export');
+const exportDir = join(dir, 'Library export');
 mkdirSync(join(exportDir, 'Night Sessions'), { recursive: true });
 mkdirSync(join(exportDir, 'Tidal EP'), { recursive: true });
 writeFileSync(join(exportDir, 'Night Sessions', 'Glass Hours v1.wav'), wav(2, 220));
@@ -89,9 +89,14 @@ await page.getByRole('alert').getByText('full https:// address').waitFor();
 await page.getByLabel(/^Link 1/).fill('https://soundcloud.com/ranuj');
 const [ac] = await Promise.all([page.waitForEvent('filechooser'), page.getByRole('button', { name: 'Add profile picture' }).click()]);
 await ac.setFiles(avatar);
+await page.getByRole('dialog', { name: 'Position your picture' }).waitFor();
+await page.getByRole('slider', { name: 'Zoom' }).fill('1.6');
+await page.getByRole('button', { name: 'Use picture' }).click();
 await page.getByText('Profile picture updated.').waitFor();
 const [bc] = await Promise.all([page.waitForEvent('filechooser'), page.getByRole('button', { name: 'Add header' }).click()]);
 await bc.setFiles(banner);
+await page.getByRole('dialog', { name: 'Position your header' }).waitFor();
+await page.getByRole('button', { name: 'Use picture' }).click();
 await page.getByText('Header updated.').waitFor();
 await page.getByRole('button', { name: 'Save profile' }).click();
 await page.getByRole('heading', { name: 'Ranuj' }).waitFor({ timeout: 8000 }).catch(async (e) => { if (shots) await page.screenshot({ path: `${shots}/pi-fail.png`, fullPage: true }); throw e; });
@@ -100,7 +105,7 @@ const imgOk = await page.evaluate(() => [...document.querySelectorAll('.profile 
 if (!imgOk) throw new Error('profile images did not load');
 const av = await page.evaluate(() => { const i = document.querySelector('.profile-head img'); return [i.naturalWidth, i.naturalHeight]; });
 if (av[0] !== av[1] || av[0] > 512) throw new Error(`avatar not cropped/resized: ${av}`);
-step('profile edited: name, bio, location, safe link (http rejected), picture and header (re-encoded square ≤512px)');
+step('profile edited: name, bio, location, safe link (http rejected); picture and header scaled/cropped then re-encoded');
 await shot('pi1-profile');
 
 const visitor = await (await browser.newContext({ viewport: { width: 390, height: 844 } })).newPage();
@@ -125,9 +130,9 @@ await page.getByRole('heading', { name: 'Import finished' }).waitFor({ timeout: 
 await page.getByText('3 of 3 files').waitFor();
 step('folder import: 2 projects, versions grouped, notes.txt skipped, renamed before import');
 
-await page.getByRole('link', { name: 'Night Sessions' }).click();
+await page.locator('#main').getByRole('link', { name: 'Night Sessions' }).click();
 await page.locator('.track-title', { hasText: 'Glass Hours' }).waitFor();
-await page.locator('.track', { hasText: 'Glass Hours' }).getByText('v2 ·').waitFor();
+await page.locator('.track', { hasText: 'Glass Hours' }).locator('.version-badge', { hasText: 'v2' }).waitFor();
 step('imported track has both versions, newest current');
 
 // import from a ZIP
@@ -137,7 +142,7 @@ await page.getByText('1 project · 1 file').waitFor();
 await page.getByRole('button', { name: 'Import 1 project' }).click();
 await page.getByRole('heading', { name: 'Import finished' }).waitFor({ timeout: 60000 });
 await page.getByRole('link', { name: 'Go to your library' }).click();
-for (const n of ['Night Sessions', 'Tidal EP (demos)', 'Late Bloom']) await page.getByRole('link', { name: new RegExp(n.replace(/[()]/g, '\\$&')) }).waitFor();
+for (const n of ['Night Sessions', 'Tidal EP (demos)', 'Late Bloom']) await page.locator('#main').getByRole('link', { name: new RegExp(n.replace(/[()]/g, '\\$&')) }).waitFor();
 step('ZIP import works; library shows all three projects');
 await shot('pi4-library');
 

@@ -1,4 +1,3 @@
-import { fingerprint } from '@arai/crypto';
 import { useCallback, useEffect, useState } from 'react';
 import { EMAIL_REASON, Notice, SMS_REASON, Unavailable } from '../components/Unavailable';
 import { api, errorMessage } from '../lib/api';
@@ -10,10 +9,9 @@ interface LoginEvent { at: number; success: boolean; device: string | null; newD
 const fmt = (t: number) => new Date(t).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
 
 export function Settings() {
-  const { user, keys, caps, signOut } = useSession();
+  const { user, caps, signOut } = useSession();
   const [sessions, setSessions] = useState<SessionInfo[] | null>(null);
   const [events, setEvents] = useState<LoginEvent[] | null>(null);
-  const [fp, setFp] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
 
@@ -31,9 +29,6 @@ export function Settings() {
   }, []);
 
   useEffect(() => void load(), [load]);
-  useEffect(() => {
-    if (keys) void fingerprint(keys.box.publicKey, keys.sign.publicKey).then(setFp);
-  }, [keys]);
 
   async function revoke(id: string, current: boolean) {
     if (current) return void signOut();
@@ -88,13 +83,6 @@ export function Settings() {
 
       <section className="section" aria-labelledby="enc">
         <h2 id="enc">Encryption</h2>
-        <div className="row">
-          <div className="row-main">
-            <div className="row-title">Your key fingerprint</div>
-            <p className="row-sub">Collaborators can compare this to confirm they are sharing with the real you.</p>
-            <div className="fingerprint">{fp ?? '…'}</div>
-          </div>
-        </div>
         <div className="row">
           <div className="row-main">
             <div className="row-title">Recovery key</div>

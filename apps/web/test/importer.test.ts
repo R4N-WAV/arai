@@ -24,22 +24,22 @@ describe('parseName', () => {
 describe('buildPlan', () => {
   it('turns folders into projects and groups versions into tracks', () => {
     const plan = buildPlan([
-      f('Samply export/Night Sessions/Glass Hours v1.wav', 10, 1),
-      f('Samply export/Night Sessions/Glass Hours v2.wav', 10, 2),
-      f('Samply export/Night Sessions/Glass Hours final.wav', 10, 3),
-      f('Samply export/Night Sessions/Undertow.mp3'),
-      f('Samply export/Night Sessions/cover.jpg'),
-      f('Samply export/Tidal EP/Low Tide.flac'),
-      f('Samply export/Tidal EP/notes.txt'),
-      f('Samply export/__MACOSX/._junk.wav'),
-      f('Samply export/.DS_Store'),
+      f('Library export/Night Sessions/Glass Hours v1.wav', 10, 1),
+      f('Library export/Night Sessions/Glass Hours v2.wav', 10, 2),
+      f('Library export/Night Sessions/Glass Hours final.wav', 10, 3),
+      f('Library export/Night Sessions/Undertow.mp3'),
+      f('Library export/Night Sessions/cover.jpg'),
+      f('Library export/Tidal EP/Low Tide.flac'),
+      f('Library export/Tidal EP/notes.txt'),
+      f('Library export/__MACOSX/._junk.wav'),
+      f('Library export/.DS_Store'),
     ]);
     expect(plan.projects.map((p) => p.name)).toEqual(['Night Sessions', 'Tidal EP']);
     const night = plan.projects[0]!;
     expect(night.cover?.name).toBe('cover.jpg');
     expect(night.tracks.map((t) => t.title)).toEqual(['Glass Hours', 'Undertow']);
     expect(night.tracks[0]!.versions.map((v) => v.name)).toEqual(['Glass Hours v1.wav', 'Glass Hours v2.wav', 'Glass Hours final.wav']);
-    expect(plan.skipped).toEqual(['Samply export/Tidal EP/notes.txt']);
+    expect(plan.skipped).toEqual(['Library export/Tidal EP/notes.txt']);
   });
 
   it('treats a single chosen folder of loose files as one project', () => {
@@ -50,8 +50,8 @@ describe('buildPlan', () => {
   });
 
   it('handles a ZIP-style root with nested project folders and ignores image-only folders', () => {
-    const plan = buildPlan([f('untitled-export/Late Bloom/Soft Machine.m4a'), f('untitled-export/Artwork/cover.png')]);
+    const plan = buildPlan([f('platform-export/Late Bloom/Soft Machine.m4a'), f('platform-export/Artwork/cover.png')]);
     expect(plan.projects.map((p) => p.name)).toEqual(['Late Bloom']);
-    expect(plan.skipped).toContain('untitled-export/Artwork/cover.png');
+    expect(plan.skipped).toContain('platform-export/Artwork/cover.png');
   });
 });

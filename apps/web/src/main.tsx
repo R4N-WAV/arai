@@ -17,7 +17,10 @@ import { Register } from './pages/Register';
 import { Settings } from './pages/Settings';
 import { SignIn } from './pages/SignIn';
 import { Unlock } from './pages/Unlock';
+import { startStreamingWorker } from './lib/stream';
 import './styles/app.css';
+
+void startStreamingWorker();
 
 function RequireAuth({ children }: { children: ReactNode }) {
   const { loading, user, keys } = useSession();

@@ -49,29 +49,38 @@ step('name and description never left the browser unencrypted');
 
 // library lists it, survives a reload (decrypted again from ciphertext)
 await page.locator('.sidebar').getByRole('link', { name: 'Library' }).click();
-await page.getByRole('link', { name: new RegExp(secretName) }).waitFor();
+await page.locator('#main').getByRole('link', { name: new RegExp(secretName) }).waitFor();
 await page.reload();
-await page.getByRole('link', { name: new RegExp(secretName) }).waitFor();
+await page.locator('#main').getByRole('link', { name: new RegExp(secretName) }).waitFor();
 await shot('p2-library');
 step('library lists the project after reload (decrypted client-side)');
 
 // edit
-await page.getByRole('link', { name: new RegExp(secretName) }).click();
+await page.locator('#main').getByRole('link', { name: new RegExp(secretName) }).click();
 await page.getByRole('button', { name: 'Edit details' }).click();
-await page.getByRole('textbox', { name: 'Description', exact: true }).fill('Late-night demos, now with strings.');
-await page.getByRole('button', { name: 'Save' }).click();
+const dlg = page.getByRole('dialog', { name: 'Edit details' });
+await dlg.waitFor();
+await dlg.getByRole('textbox', { name: 'Description', exact: true }).fill('Late-night demos, now with strings.');
+await dlg.getByRole('button', { name: 'Save' }).click();
+await dlg.waitFor({ state: 'hidden' });
 await page.getByText('now with strings').waitFor();
-step('details edited and re-encrypted');
+step('details edited in the overlay and re-encrypted');
+const actions = await page.locator('.project-actions button').allTextContents();
+if (actions.join('|') !== 'Edit details') throw new Error(`unexpected project buttons: ${actions}`);
+step('project page shows only Edit details (Add tracks appears once there are tracks)');
 
-// make public, then private again
-await page.getByRole('button', { name: 'Make public…' }).click();
-await page.getByRole('button', { name: 'Make public', exact: true }).click();
-await page.getByText('Public project').waitFor();
+// make public, then private again (inside the overlay)
+await page.getByRole('button', { name: 'Edit details' }).click();
+await dlg.getByRole('button', { name: 'Make public…' }).click();
+await dlg.getByRole('button', { name: 'Make public', exact: true }).click();
+await page.locator('.project-meta', { hasText: 'public ·' }).waitFor();
 if (!sent.some((b) => b.includes('"publicMeta"') && b.includes(secretName))) throw new Error('public details were not sent when publishing');
-await page.getByRole('button', { name: 'Make private…' }).click();
-await page.getByRole('button', { name: 'Make private', exact: true }).click();
-await page.getByText('Private project').waitFor();
-step('visibility switched public → private with confirmation');
+await dlg.getByRole('button', { name: 'Make private…' }).click();
+await dlg.getByRole('button', { name: 'Make private', exact: true }).click();
+await page.locator('.project-meta', { hasText: 'private ·' }).waitFor();
+await page.keyboard.press('Escape');
+await dlg.waitFor({ state: 'hidden' });
+step('visibility switched public → private with confirmation; Esc closes the overlay');
 await shot('p3-project');
 
 // mobile
@@ -82,10 +91,10 @@ await page.setViewportSize({ width: 1280, height: 860 });
 step('project page fits a phone screen');
 
 // delete (requires typing the name)
-await page.getByRole('button', { name: 'Delete…' }).click();
-const del = page.getByRole('button', { name: 'Delete project' });
+await page.getByRole('button', { name: 'Edit details' }).click();
+const del = dlg.getByRole('button', { name: 'Delete project' });
 if (!(await del.isDisabled())) throw new Error('delete enabled before typing the name');
-await page.getByLabel(/Type the project name/).fill(secretName);
+await dlg.getByLabel(/Type the project name/).fill(secretName);
 await del.click();
 await page.getByRole('heading', { name: 'Your space is quiet.' }).waitFor();
 step('deleted after typing its name; library is empty again');

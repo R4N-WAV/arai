@@ -40,7 +40,7 @@ export function PlayerBar() {
       </div>
       <div className="player-scrub">
         <span className="mono player-time">{formatTime(p.time)}</span>
-        <Waveform peaks={p.peaks} current={p.time} duration={p.duration} onSeek={p.seek} label={`Seek in ${item.track.title}`} />
+        <Waveform data={p.wave} current={p.time} duration={p.duration} onSeek={p.seek} label={`Seek in ${item.track.title}`} />
         <span className="mono player-time">{formatTime(p.duration)}</span>
       </div>
       <div className="player-extras">

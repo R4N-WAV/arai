@@ -25,7 +25,7 @@ export function NewProject() {
           setError(null);
           try {
             const p = await create(meta, visibility);
-            nav(`/projects/${p.id}`);
+            nav(`/projects/${p.id}`, { viewTransition: true });
           } catch (e) {
             setError(errorMessage(e));
           }

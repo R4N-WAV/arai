@@ -263,3 +263,12 @@ ticket from `/api/realtime/ticket` (cookie-authenticated), validated by the DO.
   server-side (magic bytes, size, pixel dimensions ≤512 / ≤1800 to stop
   decompression bombs). Links must be https without credentials and render
   with `rel="noopener noreferrer nofollow ugc"`.
+- **ADR-014 Streaming playback via Service Worker.** (2026-11-01) The owner
+  required instant, track-to-track playback. A module service worker answers
+  Range requests for `/_stream/<token>` by fetching + decrypting 1 MiB chunks
+  (2-chunk read-ahead, small in-memory plaintext LRU) so `<audio>` starts after
+  the first chunk; the next queue item is pre-warmed. Built as a second Vite
+  entry emitted at `/sw.js`.
+- **ADR-015 Auto-deploy.** (2026-11-01) At the owner's request the deploy
+  workflow also runs on pushes to the development branch, so finished work is
+  live without manual steps.

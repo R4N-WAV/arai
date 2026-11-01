@@ -22,8 +22,8 @@ export function Library() {
           <h2 id="empty-title">Your space is quiet.</h2>
           <p className="voice">Start a project and its colours will begin to seep in.</p>
           <p className="form-actions" style={{ marginTop: 'var(--s-6)', justifyContent: 'center' }}>
-            <Link to="/projects/new" className="btn">New project</Link>
-            <Link to="/import" className="btn btn-ghost">Import from Samply or Untitled</Link>
+            <Link to="/projects/new" className="btn" viewTransition>New project</Link>
+            <Link to="/import" className="btn btn-ghost">Import from other platforms</Link>
           </p>
         </section>
       </>
@@ -40,7 +40,7 @@ export function Library() {
         </div>
         <span className="form-actions">
           <Link to="/import" className="btn btn-ghost">Import</Link>
-          <Link to="/projects/new" className="btn">New project</Link>
+          <Link to="/projects/new" className="btn" viewTransition>New project</Link>
         </span>
       </header>
       {error && <Notice kind="error">{error}</Notice>}
@@ -57,8 +57,10 @@ export function Library() {
         <ul className="sleeves">
           {shown.map((p) => (
             <li key={p.id}>
-              <Link to={`/projects/${p.id}`} className="sleeve">
-                {p.meta ? <Cover name={p.meta.name} color={p.meta.color} /> : <div className="cover cover-locked" aria-hidden="true" />}
+              <Link to={`/projects/${p.id}`} className="sleeve" viewTransition>
+                <div className="cover-shared" style={{ viewTransitionName: `cover-${p.id}` }}>
+                  {p.meta ? <Cover name={p.meta.name} color={p.meta.color} /> : <div className="cover cover-locked" aria-hidden="true" />}
+                </div>
                 <span className="sleeve-name">{p.meta?.name ?? 'Locked project'}</span>
                 <span className="sleeve-meta">
                   {p.visibility} · {p.role === 'owner' ? `created ${date(p.createdAt)}` : `shared with you`}

@@ -31,6 +31,10 @@ export interface VersionMeta {
   sampleRate: number | null;
   channels: number | null;
   peaks: string | null; // base64url of 0–255 buckets
+  rms?: string | null;
+  loudness?: number | null; // LUFS
+  peakDb?: number | null;
+  bitDepth?: number | null;
   notes: string;
 }
 
@@ -189,7 +193,7 @@ export class UploadJob {
         if (this.file.size > MAX_FILE_BYTES) throw new Error('too_large');
         const fmt = await sniff(this.file);
         if (!fmt) throw new Error('unsupported_format');
-        const a = await analyse(this.file);
+        const a = await analyse(this.file, fmt.format);
         this.meta = {
           fileName: this.file.name.slice(0, 200),
           format: fmt.format,
@@ -199,6 +203,10 @@ export class UploadJob {
           sampleRate: a.sampleRate,
           channels: a.channels,
           peaks: a.peaks ? await toBase64Url(a.peaks) : null,
+          rms: a.rms ? await toBase64Url(a.rms) : null,
+          loudness: a.loudness,
+          peakDb: a.peakDb,
+          bitDepth: a.bitDepth,
           notes: this.notes.slice(0, 500),
         };
         const fileId = newId();
@@ -306,10 +314,15 @@ export async function audioUrl(project: Project, v: TrackVersion, onProgress?: (
   return url;
 }
 
-export async function decodePeaks(meta: VersionMeta | null): Promise<Uint8Array | null> {
+export interface WaveData {
+  peaks: Uint8Array;
+  rms: Uint8Array | null;
+}
+
+export async function decodeWave(meta: VersionMeta | null): Promise<WaveData | null> {
   if (!meta?.peaks) return null;
   try {
-    return await fromBase64Url(meta.peaks);
+    return { peaks: await fromBase64Url(meta.peaks), rms: meta.rms ? await fromBase64Url(meta.rms) : null };
   } catch {
     return null;
   }

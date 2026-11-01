@@ -2,23 +2,118 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { Cover } from '../components/Cover';
 import { Field } from '../components/Field';
+import { Modal } from '../components/Modal';
 import { ProjectForm } from '../components/ProjectForm';
 import { TracksSection } from '../components/TracksSection';
 import { Notice } from '../components/Unavailable';
 import { errorMessage } from '../lib/api';
-import { useProjects } from '../lib/projects';
+import { formatTime } from '../lib/audio';
+import { usePlayer } from '../lib/player';
+import { useProjects, type Project } from '../lib/projects';
+import type { Track } from '../lib/tracks';
+import { useSession } from '../lib/session';
 
 const date = (t: number) => new Date(t).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
 
-export function ProjectPage() {
-  const { id } = useParams();
-  const { projects, update, remove, focus } = useProjects();
+/** Everything about the project itself, in one overlay: details, visibility, deletion. */
+function EditDetails({ p, open, onClose }: { p: Project; open: boolean; onClose: () => void }) {
+  const { update, remove } = useProjects();
   const nav = useNavigate();
-  const [mode, setMode] = useState<'view' | 'edit' | 'visibility' | 'delete'>('view');
+  const [confirmVis, setConfirmVis] = useState(false);
   const [confirmName, setConfirmName] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
+  const meta = p.meta!;
+  const canAdmin = p.role === 'admin' || p.role === 'owner';
+  const isOwner = p.role === 'owner';
+
+  useEffect(() => {
+    if (open) {
+      setConfirmVis(false);
+      setConfirmName('');
+      setError(null);
+      setStatus(null);
+    }
+  }, [open]);
+
+  async function run(action: () => Promise<unknown>, done: string) {
+    setBusy(true);
+    setError(null);
+    try {
+      await action();
+      setStatus(done);
+      setConfirmVis(false);
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Modal open={open} onClose={onClose} title="Edit details" wide>
+      {error && <Notice kind="error">{error}</Notice>}
+      {status && <Notice kind="ok">{status}</Notice>}
+      <ProjectForm
+        initial={{ meta, visibility: p.visibility }}
+        submitLabel="Save"
+        busyLabel="Encrypting…"
+        showVisibility={false}
+        onSubmit={(v) => run(async () => { await update(p, { meta: v.meta }); onClose(); }, 'Saved.')}
+      />
+
+      {canAdmin && (
+        <section className="modal-section" aria-labelledby="vis-h">
+          <h3 id="vis-h">Visibility</h3>
+          <p className="row-sub">
+            {p.visibility === 'public'
+              ? 'Public: anyone can find this project and see its name, description, genre and tags.'
+              : 'Private: only you and the people you invite. Encrypted so that not even Arai can read it.'}
+          </p>
+          {!confirmVis ? (
+            <button type="button" className="btn btn-sm" onClick={() => setConfirmVis(true)}>{p.visibility === 'public' ? 'Make private…' : 'Make public…'}</button>
+          ) : (
+            <div className="confirm-inline">
+              <p className="muted">
+                {p.visibility === 'public'
+                  ? 'Its public details are removed from Arai straight away. Anyone who already saw or saved them may still have a copy.'
+                  : 'Its name, description, genre and tags will be stored unencrypted and visible to anyone. Everything else stays encrypted. You can make it private again later.'}
+              </p>
+              <div className="form-actions">
+                <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={() => run(() => update(p, { visibility: p.visibility === 'public' ? 'private' : 'public' }), p.visibility === 'public' ? 'The project is private now.' : 'The project is public now.')}>
+                  {p.visibility === 'public' ? 'Make private' : 'Make public'}
+                </button>
+                <button type="button" className="btn btn-ghost btn-sm" onClick={() => setConfirmVis(false)}>Cancel</button>
+              </div>
+            </div>
+          )}
+        </section>
+      )}
+
+      {isOwner && (
+        <section className="modal-section danger" aria-labelledby="del-h">
+          <h3 id="del-h">Delete project</h3>
+          <p className="row-sub">It disappears for you and everyone you shared it with, and its public page goes offline. This cannot be undone.</p>
+          <Field label={`Type the project name (${meta.name}) to confirm`} value={confirmName} onChange={(e) => setConfirmName(e.target.value)} autoComplete="off" />
+          <button type="button" className="btn btn-danger btn-sm" disabled={busy || confirmName.trim() !== meta.name} onClick={() => run(async () => { await remove(p); nav('/', { viewTransition: true }); }, 'Deleted.')}>
+            Delete project
+          </button>
+        </section>
+      )}
+    </Modal>
+  );
+}
+
+export function ProjectPage() {
+  const { id } = useParams();
+  const { projects, focus } = useProjects();
+  const [editOpen, setEditOpen] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
+  const [tracks, setTracks] = useState<Track[] | null>(null);
+  const count = tracks?.length ?? null;
+  const player = usePlayer();
+  const { user } = useSession();
 
   useEffect(() => {
     focus(id ?? null);
@@ -46,33 +141,21 @@ export function ProjectPage() {
   }
   const meta = p.meta;
   const canEdit = p.role !== 'listener';
-  const canAdmin = p.role === 'admin' || p.role === 'owner';
-  const isOwner = p.role === 'owner';
-
-  async function run(action: () => Promise<unknown>, done: string) {
-    setBusy(true);
-    setError(null);
-    try {
-      await action();
-      setStatus(done);
-      setMode('view');
-    } catch (e) {
-      setError(errorMessage(e));
-    } finally {
-      setBusy(false);
-    }
-  }
 
   return (
-    <>
+    <div className="project-page">
       <header className="project-hero">
-        <Cover name={meta.name} color={meta.color} size="hero" />
+        <div className="cover-shared" style={{ viewTransitionName: `cover-${p.id}` }}>
+          <Cover name={meta.name} color={meta.color} size="hero" />
+        </div>
         <div className="project-hero-text">
-          <p className="row-sub">
-            {p.visibility === 'public' ? 'Public project' : 'Private project'} · created {date(p.createdAt)}
+          <p className="row-sub project-meta">
+            {count ? `${count} track${count === 1 ? '' : 's'} · ${formatTime(tracks!.reduce((n, t) => n + (t.current?.meta?.duration ?? 0), 0))} · ` : ''}
+            {p.visibility === 'public' ? 'public' : 'private'} · created {date(p.createdAt)}
             {p.role !== 'owner' && ` · you are ${p.role === 'admin' ? 'an admin' : `a ${p.role}`}`}
           </p>
           <h1>{meta.name}</h1>
+          {p.role === 'owner' && user && <p className="row-sub project-owner">by {user.username}</p>}
           {meta.description && <p className="voice project-description">{meta.description}</p>}
           {(meta.genre || meta.tags.length > 0) && (
             <p className="project-tags">
@@ -80,70 +163,29 @@ export function ProjectPage() {
               {meta.tags.map((t) => <span key={t} className="tag">{t}</span>)}
             </p>
           )}
+          <div className="form-actions project-actions">
+            {count !== null && count > 0 && (
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => {
+                  if (player.item && tracks!.some((t) => t.id === player.item!.track.id)) return player.toggle();
+                  const list = tracks!.filter((t) => t.current);
+                  player.playQueue(list.map((t) => ({ project: p, track: t, version: t.current! })), 0);
+                }}
+              >
+                <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d={player.status === 'playing' && player.item?.project.id === p.id ? 'M7 5h4v14H7zM13 5h4v14h-4z' : 'M8 5v14l11-7z'} fill="currentColor" /></svg>
+                {player.status === 'playing' && player.item?.project.id === p.id ? 'Pause' : 'Play'}
+              </button>
+            )}
+            {canEdit && count !== null && count > 0 && <button type="button" className="btn" onClick={() => setAddOpen(true)}>Add tracks</button>}
+            {canEdit && <button type="button" className="btn" onClick={() => setEditOpen(true)}>Edit details</button>}
+          </div>
         </div>
       </header>
 
-      {error && <Notice kind="error">{error}</Notice>}
-      {status && <Notice kind="ok">{status}</Notice>}
-
-      {mode === 'view' && (canEdit || canAdmin || isOwner) && (
-        <div className="form-actions" style={{ marginBottom: 'var(--s-7)' }}>
-          {canEdit && <button type="button" className="btn btn-sm" onClick={() => { setStatus(null); setMode('edit'); }}>Edit details</button>}
-          {canAdmin && (
-            <button type="button" className="btn btn-sm" onClick={() => { setStatus(null); setMode('visibility'); }}>
-              {p.visibility === 'public' ? 'Make private…' : 'Make public…'}
-            </button>
-          )}
-          {isOwner && <button type="button" className="btn btn-danger btn-sm" onClick={() => { setStatus(null); setConfirmName(''); setMode('delete'); }}>Delete…</button>}
-        </div>
-      )}
-
-      {mode === 'edit' && (
-        <section className="section" aria-labelledby="edit-h">
-          <h2 id="edit-h">Edit details</h2>
-          <ProjectForm
-            initial={{ meta, visibility: p.visibility }}
-            submitLabel="Save"
-            busyLabel="Encrypting…"
-            showVisibility={false}
-            onCancel={() => setMode('view')}
-            onSubmit={(v) => run(() => update(p, { meta: v.meta }), 'Saved.')}
-          />
-        </section>
-      )}
-
-      {mode === 'visibility' && (
-        <section className="section confirm" aria-labelledby="vis-h">
-          <h2 id="vis-h">{p.visibility === 'public' ? 'Make this project private?' : 'Make this project public?'}</h2>
-          {p.visibility === 'public' ? (
-            <p className="muted">Its public details are removed from Arai straight away. Anyone who already saw or saved them may still have a copy.</p>
-          ) : (
-            <p className="muted">Its name, description, genre and tags will be stored unencrypted and visible to anyone. Everything else stays encrypted. You can make it private again later.</p>
-          )}
-          <div className="form-actions">
-            <button type="button" className="btn btn-primary" disabled={busy} onClick={() => run(() => update(p, { visibility: p.visibility === 'public' ? 'private' : 'public' }), p.visibility === 'public' ? 'The project is private now.' : 'The project is public now.')}>
-              {p.visibility === 'public' ? 'Make private' : 'Make public'}
-            </button>
-            <button type="button" className="btn btn-ghost" onClick={() => setMode('view')}>Cancel</button>
-          </div>
-        </section>
-      )}
-
-      {mode === 'delete' && (
-        <section className="section confirm" aria-labelledby="del-h">
-          <h2 id="del-h">Delete this project?</h2>
-          <p className="muted">It disappears for you and everyone you shared it with, and its public page goes offline. This cannot be undone from Arai.</p>
-          <Field label={`Type the project name (${meta.name}) to confirm`} value={confirmName} onChange={(e) => setConfirmName(e.target.value)} autoComplete="off" />
-          <div className="form-actions">
-            <button type="button" className="btn btn-danger" disabled={busy || confirmName.trim() !== meta.name} onClick={() => run(async () => { await remove(p); nav('/'); }, 'Deleted.')}>
-              Delete project
-            </button>
-            <button type="button" className="btn btn-ghost" onClick={() => setMode('view')}>Cancel</button>
-          </div>
-        </section>
-      )}
-
-      <TracksSection project={p} />
-    </>
+      <TracksSection project={p} addOpen={addOpen} setAddOpen={setAddOpen} onTracks={setTracks} />
+      {canEdit && <EditDetails p={p} open={editOpen} onClose={() => setEditOpen(false)} />}
+    </div>
   );
 }

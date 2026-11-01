@@ -39,7 +39,7 @@ export function ImportPage() {
       const sources = await expandZips(await get(), (n) => setReading(`Unpacking ${n}…`));
       const p = buildPlan(sources);
       if (p.projects.length === 0) {
-        setError('No audio files were found. Choose the folder or ZIP you downloaded from Samply or Untitled.');
+        setError('No audio files were found. Choose the folder or ZIP you downloaded from the other platform.');
         setPhase('pick');
         return;
       }
@@ -120,16 +120,16 @@ export function ImportPage() {
       {(phase === 'pick' || phase === 'reading') && (
         <>
           <section className="section" aria-labelledby="how-h">
-            <h2 id="how-h">From Samply or Untitled</h2>
+            <h2 id="how-h">From other platforms</h2>
             <p className="muted">
-              Neither service lets other apps copy your library directly, so the move happens through your own computer:
+              Most music platforms do not let other apps copy your library directly, so the move happens through your own computer:
             </p>
             <ol className="steps">
-              <li><strong>Download your music</strong> from Samply or Untitled using their download or export option, project by project. Folders or ZIP files both work.</li>
+              <li><strong>Download your music</strong> from the other platform using its download or export option, project by project. Folders or ZIP files both work.</li>
               <li><strong>Keep one folder per project</strong> if you can. Arai turns each folder (or ZIP) into a project.</li>
               <li><strong>Choose that folder below.</strong> Files named like “Song v2”, “Song (3)” or “Song final” become versions of one track.</li>
             </ol>
-            <p className="row-sub">Everything is read and encrypted in this browser before it uploads. Your Samply or Untitled password is never needed.</p>
+            <p className="row-sub">Everything is read and encrypted in this browser before it uploads. Your password for the other platform is never needed.</p>
           </section>
           <div
             className={dragging ? 'dropzone dragging' : 'dropzone'}

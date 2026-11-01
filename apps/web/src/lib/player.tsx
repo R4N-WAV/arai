@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { Project } from './projects';
-import { audioUrl, decodePeaks, type Track, type TrackVersion } from './tracks';
+import { prefetch, streamUrl } from './stream';
+import { audioUrl, decodeWave, type Track, type TrackVersion, type WaveData } from './tracks';
 
 export interface QueueItem {
   project: Project;
@@ -19,7 +20,7 @@ interface PlayerState {
   volume: number;
   loop: boolean;
   rate: number;
-  peaks: Uint8Array | null;
+  wave: WaveData | null;
   playQueue: (items: QueueItem[], start: number) => void;
   toggle: () => void;
   seek: (t: number) => void;
@@ -45,8 +46,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const [volume, setVolumeState] = useState(1);
   const [loop, setLoop] = useState(false);
   const [rate, setRateState] = useState(1);
-  const [peaks, setPeaks] = useState<Uint8Array | null>(null);
+  const [wave, setWave] = useState<WaveData | null>(null);
   const loadToken = useRef(0);
+  const prefetched = useRef(new Set<string>());
   const item = queue[index] ?? null;
 
   const load = useCallback(async (q: QueueItem[], i: number) => {
@@ -58,11 +60,25 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     setLoadProgress(0);
     setTime(0);
     setDuration(it.version.meta?.duration ?? 0);
-    setPeaks(await decodePeaks(it.version.meta));
+    setWave(await decodeWave(it.version.meta));
     try {
-      const url = await audioUrl(it.project, it.version, (p) => token === loadToken.current && setLoadProgress(p));
+      // Stream (starts after the first chunk); fall back to full decrypt.
+      let url = await streamUrl(it.project, it.version).catch(() => null);
       if (token !== loadToken.current) return;
-      el.src = url;
+      if (url) {
+        el.src = url;
+        el.playbackRate = rate;
+        try {
+          await el.play();
+          return;
+        } catch (e) {
+          if ((e as DOMException)?.name === 'NotAllowedError') throw e;
+          url = null; // stream expired or unsupported format: decrypt in memory instead
+        }
+      }
+      const blobUrl = await audioUrl(it.project, it.version, (p) => token === loadToken.current && setLoadProgress(p));
+      if (token !== loadToken.current) return;
+      el.src = blobUrl;
       el.playbackRate = rate;
       await el.play();
     } catch {
@@ -87,9 +103,19 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     if (!el) return;
     const on = (name: string, fn: () => void) => (el.addEventListener(name, fn), () => el.removeEventListener(name, fn));
     const offs = [
-      on('play', () => setStatus('playing')),
+      // 'playing' fires only when sound actually starts; 'waiting' when it stalls.
+      on('playing', () => setStatus('playing')),
+      on('waiting', () => setStatus('loading')),
       on('pause', () => setStatus((s) => (s === 'loading' ? s : 'paused'))),
-      on('timeupdate', () => setTime(el.currentTime)),
+      on('timeupdate', () => {
+        setTime(el.currentTime);
+        // Warm the next track well before this one ends, so the switch is instant.
+        const nextItem = queue[index + 1];
+        if (nextItem && el.duration && el.currentTime > Math.min(10, el.duration * 0.25) && !prefetched.current.has(nextItem.version.id)) {
+          prefetched.current.add(nextItem.version.id);
+          void prefetch(nextItem.project, nextItem.version);
+        }
+      }),
       on('loadedmetadata', () => Number.isFinite(el.duration) && setDuration(el.duration)),
       on('ended', () => {
         if (index < queue.length - 1) go(index + 1);
@@ -99,6 +125,86 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     ];
     return () => offs.forEach((f) => f());
   }, [index, queue, go]);
+
+  // Operating-system media keys, lock screen and headphone buttons.
+  useEffect(() => {
+    if (!('mediaSession' in navigator) || !item) return;
+    navigator.mediaSession.metadata = new MediaMetadata({ title: item.track.title, artist: item.project.meta?.name ?? 'Arai', album: `Version ${item.version.number}` });
+    const el = audio.current;
+    const set = (a: MediaSessionAction, h: MediaSessionActionHandler | null) => {
+      try {
+        navigator.mediaSession.setActionHandler(a, h);
+      } catch {
+        /* unsupported action */
+      }
+    };
+    set('play', () => void el?.play());
+    set('pause', () => el?.pause());
+    set('previoustrack', () => (el && el.currentTime > 3 ? (el.currentTime = 0) : go(index - 1)));
+    set('nexttrack', index < queue.length - 1 ? () => go(index + 1) : null);
+    set('seekto', (d) => el && d.seekTime != null && (el.currentTime = d.seekTime));
+    set('seekbackward', () => el && (el.currentTime = Math.max(0, el.currentTime - 10)));
+    set('seekforward', () => el && (el.currentTime = el.currentTime + 10));
+  }, [item, index, queue.length, go]);
+
+  useEffect(() => {
+    if ('mediaSession' in navigator) navigator.mediaSession.playbackState = status === 'playing' ? 'playing' : status === 'paused' ? 'paused' : 'none';
+  }, [status]);
+
+  // Keyboard: Space/K play-pause, ←/→ (J/L) seek, Shift+←/→ prev/next, ↑/↓ volume, M mute, R repeat.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const el = audio.current;
+      if (!el || !item || e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.closest('[role="slider"],dialog[open]'))) return;
+      const isButton = t?.tagName === 'BUTTON' || t?.tagName === 'A';
+      switch (e.key) {
+        case ' ':
+          if (isButton) return; // let Space activate the focused button
+          e.preventDefault();
+          if (el.paused) void el.play();
+          else el.pause();
+          break;
+        case 'k':
+          el.paused ? void el.play() : el.pause();
+          break;
+        case 'ArrowRight':
+        case 'l':
+          if (e.shiftKey) go(index + 1);
+          else el.currentTime = Math.min(el.duration || Infinity, el.currentTime + 5);
+          e.preventDefault();
+          break;
+        case 'ArrowLeft':
+        case 'j':
+          if (e.shiftKey) el.currentTime > 3 ? (el.currentTime = 0) : go(index - 1);
+          else el.currentTime = Math.max(0, el.currentTime - 5);
+          e.preventDefault();
+          break;
+        case 'ArrowUp':
+          e.preventDefault();
+          el.volume = Math.min(1, el.volume + 0.05);
+          setVolumeState(el.volume);
+          break;
+        case 'ArrowDown':
+          e.preventDefault();
+          el.volume = Math.max(0, el.volume - 0.05);
+          setVolumeState(el.volume);
+          break;
+        case 'm':
+          el.muted = !el.muted;
+          break;
+        case 'r':
+          el.loop = !el.loop;
+          setLoop(el.loop);
+          break;
+        default:
+          return;
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [item, index, go]);
 
   const value = useMemo<PlayerState>(() => ({
     queue,
@@ -111,7 +217,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     volume,
     loop,
     rate,
-    peaks,
+    wave,
     playQueue,
     toggle: () => {
       const el = audio.current;
@@ -153,7 +259,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         audio.current.playbackRate = r;
       }
     },
-  }), [queue, index, item, status, loadProgress, time, duration, volume, loop, rate, peaks, playQueue, go]);
+  }), [queue, index, item, status, loadProgress, time, duration, volume, loop, rate, wave, playQueue, go]);
 
   return (
     <Ctx.Provider value={value}>
