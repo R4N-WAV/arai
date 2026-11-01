@@ -178,8 +178,18 @@ export function ProjectPage() {
                 {player.status === 'playing' && player.item?.project.id === p.id ? 'Pause' : 'Play'}
               </button>
             )}
-            {canEdit && count !== null && count > 0 && <button type="button" className="btn" onClick={() => setAddOpen(true)}>Add tracks</button>}
-            {canEdit && <button type="button" className="btn" onClick={() => setEditOpen(true)}>Edit details</button>}
+            {canEdit && count !== null && count > 0 && (
+              <button type="button" className="btn btn-icon-label" aria-label="Add tracks" onClick={() => setAddOpen(true)}>
+                <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
+                <span className="btn-label">Add tracks</span>
+              </button>
+            )}
+            {canEdit && (
+              <button type="button" className="btn btn-icon-label" aria-label="Edit details" onClick={() => setEditOpen(true)}>
+                <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 20h4L19 9l-4-4L4 16z" /><path d="m13.5 6.5 4 4" /></svg>
+                <span className="btn-label">Edit details</span>
+              </button>
+            )}
           </div>
         </div>
       </header>

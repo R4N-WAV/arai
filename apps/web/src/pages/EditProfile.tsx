@@ -8,6 +8,7 @@ import { Avatar, imageUrl } from '../components/ProfileView';
 import { Notice } from '../components/Unavailable';
 import { api, errorMessage } from '../lib/api';
 import { uploadImage } from '../lib/images';
+import { useMe } from '../lib/me';
 
 const IMAGE_ERRORS: Record<string, string> = {
   unsupported_image: 'That file is not an image this browser can read.',
@@ -17,6 +18,7 @@ const IMAGE_ERRORS: Record<string, string> = {
 
 export function EditProfile() {
   const nav = useNavigate();
+  const me = useMe();
   const [profile, setProfile] = useState<ProfileDto | null>(null);
   const [displayName, setDisplayName] = useState('');
   const [bio, setBio] = useState('');
@@ -58,6 +60,7 @@ export function EditProfile() {
       const fresh = (await api<{ profile: ProfileDto }>('GET', '/account/profile')).profile;
       setProfile((p) => (p ? { ...p, avatar: fresh.avatar, banner: fresh.banner } : fresh));
       setStatus(kind === 'avatar' ? 'Profile picture updated.' : 'Header updated.');
+      void me.refresh();
     } catch (e) {
       setError(IMAGE_ERRORS[(e as Error).message] ?? errorMessage(e));
     } finally {
@@ -68,6 +71,7 @@ export function EditProfile() {
   async function removeImage(kind: 'avatar' | 'banner') {
     const fresh = (await api<{ profile: ProfileDto }>('DELETE', `/account/profile/${kind}`)).profile;
     setProfile((p) => (p ? { ...p, avatar: fresh.avatar, banner: fresh.banner } : fresh));
+    void me.refresh();
   }
 
   async function save(e: FormEvent) {
@@ -89,7 +93,8 @@ export function EditProfile() {
       }
       const r = await api<{ profile: ProfileDto }>('PUT', '/account/profile', { displayName, bio, location, links: clean });
       apply(r.profile);
-      nav(`/u/${r.profile.username}`);
+      void me.refresh();
+      nav(`/u/${r.profile.username}`, { viewTransition: true });
     } catch (err) {
       setError(errorMessage(err) === 'Some details are not valid. Check the form and try again.' ? 'Check your links: each must be a full https:// address.' : errorMessage(err));
     } finally {

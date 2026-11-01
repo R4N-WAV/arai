@@ -6,6 +6,8 @@ import { HomeLink } from './Logo';
 import { PlayerBar } from './PlayerBar';
 import { usePlayer } from '../lib/player';
 import { useProjects } from '../lib/projects';
+import { useMe } from '../lib/me';
+import { Avatar } from './ProfileView';
 
 const NAV = [
   { to: '/', label: 'Library', icon: IconLibrary, end: true },
@@ -23,7 +25,8 @@ export function AppShellWith({ children }: { children: ReactNode }) {
   const { item } = usePlayer();
   const location = useLocation();
   const { projects } = useProjects();
-  const initial = user?.username.slice(0, 1).toUpperCase();
+  const { profile } = useMe();
+  const me = profile ?? { username: user?.username ?? '', avatar: null, displayName: '' };
   const links = NAV.map(({ to, label, icon: Icon, end }) => (
     <NavLink key={to} to={to} end={end} className="nav-link" viewTransition>
       <Icon />
@@ -53,8 +56,8 @@ export function AppShellWith({ children }: { children: ReactNode }) {
         )}
         <div className="sidebar-foot">
           <Link to={`/u/${user?.username ?? ''}`} className="user-chip">
-            <span className="avatar" aria-hidden="true">{initial}</span>
-            <span className="user-name">{user?.username}</span>
+            <Avatar profile={me} size={32} />
+            <span className="user-name">{profile?.displayName || user?.username}</span>
             <span className="visually-hidden">, your profile</span>
           </Link>
           <button type="button" className="btn btn-ghost btn-sm" onClick={() => void signOut()}>Sign out</button>
@@ -64,7 +67,7 @@ export function AppShellWith({ children }: { children: ReactNode }) {
         <header className="mobile-bar">
           <HomeLink />
           <span className="form-actions">
-            <Link to={`/u/${user?.username ?? ''}`} className="avatar" aria-label="Your profile">{initial}</Link>
+            <Link to={`/u/${user?.username ?? ''}`} className="mobile-avatar" aria-label="Your profile"><Avatar profile={me} size={32} /></Link>
             <button type="button" className="btn btn-ghost btn-sm" onClick={() => void signOut()}>Sign out</button>
           </span>
         </header>

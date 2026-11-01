@@ -93,6 +93,7 @@ await page.getByRole('dialog', { name: 'Position your picture' }).waitFor();
 await page.getByRole('slider', { name: 'Zoom' }).fill('1.6');
 await page.getByRole('button', { name: 'Use picture' }).click();
 await page.getByText('Profile picture updated.').waitFor();
+await page.locator('.sidebar .user-chip img').waitFor();
 const [bc] = await Promise.all([page.waitForEvent('filechooser'), page.getByRole('button', { name: 'Add header' }).click()]);
 await bc.setFiles(banner);
 await page.getByRole('dialog', { name: 'Position your header' }).waitFor();
@@ -105,7 +106,7 @@ const imgOk = await page.evaluate(() => [...document.querySelectorAll('.profile 
 if (!imgOk) throw new Error('profile images did not load');
 const av = await page.evaluate(() => { const i = document.querySelector('.profile-head img'); return [i.naturalWidth, i.naturalHeight]; });
 if (av[0] !== av[1] || av[0] > 512) throw new Error(`avatar not cropped/resized: ${av}`);
-step('profile edited: name, bio, location, safe link (http rejected); picture and header scaled/cropped then re-encoded');
+step('profile edited: name, bio, location, safe link (http rejected); picture and header scaled/cropped then re-encoded; sidebar shows the picture');
 await shot('pi1-profile');
 
 const visitor = await (await browser.newContext({ viewport: { width: 390, height: 844 } })).newPage();

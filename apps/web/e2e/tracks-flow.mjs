@@ -87,6 +87,18 @@ await page.waitForFunction(() => document.querySelector('audio').paused);
 await page.keyboard.press(' ');
 await page.waitForFunction(() => !document.querySelector('audio').paused);
 step('Space pauses and resumes');
+// playback is universal: it keeps going while exploring the rest of Arai
+const tBefore = await page.evaluate(() => document.querySelector('audio').currentTime);
+await page.locator('.sidebar').getByRole('link', { name: 'Settings' }).click();
+await page.getByRole('heading', { name: 'Settings' }).waitFor();
+await page.locator('.sidebar .user-chip').click();
+await page.locator('#profile-name').waitFor();
+await page.locator('.sidebar').getByRole('link', { name: 'Library' }).click();
+await page.waitForFunction((t) => { const a = document.querySelector('audio'); return a && !a.paused && a.currentTime > t + 0.3; }, tBefore, { timeout: 10000 });
+await page.locator('.player').getByText('Glass Hours').waitFor();
+step('music keeps playing across Settings, Profile and Library');
+await page.goBack(); await page.goBack(); await page.goBack();
+await page.locator('.track-title', { hasText: 'Glass Hours' }).waitFor();
 const playedHash = await page.evaluate(async () => {
   const blob = await (await fetch(document.querySelector('audio').src)).arrayBuffer();
   const d = await crypto.subtle.digest('SHA-256', blob);
@@ -136,7 +148,7 @@ const row2 = await page.locator('.track').nth(1).boundingBox();
 const hb = await h1.boundingBox();
 await page.mouse.move(hb.x + hb.width / 2, hb.y + hb.height / 2);
 await page.mouse.down();
-await page.mouse.move(hb.x + hb.width / 2, row2.y + row2.height / 2, { steps: 8 });
+await page.mouse.move(hb.x + hb.width / 2, row2.y + row2.height * 0.9, { steps: 12 });
 await page.mouse.up();
 await page.waitForFunction((b) => [...document.querySelectorAll('.track-title')].map((e) => e.textContent).join(' | ') !== b, afterKey);
 step('tracks reorder by keyboard and by dragging; order persists');
@@ -149,6 +161,9 @@ await page.keyboard.press('Escape');
 step('Add tracks overlay opens; a fake .wav (text) is rejected by content sniffing');
 
 await first.getByRole('button', { name: 'More for Glass Hours' }).click();
+const menuOnTop = await page.evaluate(() => { const m = document.querySelector('.menu-list button'); const r = m.getBoundingClientRect(); return document.elementFromPoint(r.left + 10, r.top + r.height / 2) === m; });
+if (!menuOnTop) throw new Error('track menu is covered by other rows');
+step('track menu opens on top of the rows below');
 await page.getByRole('menuitem', { name: 'Delete track…' }).click();
 await first.getByRole('button', { name: 'Delete', exact: true }).click();
 await page.locator('.track-title', { hasText: 'Glass Hours' }).waitFor({ state: 'detached' });

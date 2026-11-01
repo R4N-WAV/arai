@@ -1,6 +1,6 @@
 # Project Status — authoritative checklist
 
-Last updated: 2026-11-01 (session 7). Tests: 86 passing (crypto 17, shared 4, api 60, web 5) + browser E2E: `auth-flow` (11), `projects-flow` (9), `tracks-flow` (16), `profile-import-flow` (6). `[x]` done & tested · `[~]` in progress · `[ ]` not started · `[!]` blocked.
+Last updated: 2026-11-01 (session 8). Tests: 86 passing (crypto 17, shared 4, api 60, web 5) + browser E2E: `auth-flow` (11), `projects-flow` (9), `tracks-flow` (18), `profile-import-flow` (6). `[x]` done & tested · `[~]` in progress · `[ ]` not started · `[!]` blocked.
 
 ## Phase 0 — Research & architecture
 - [x] Repository inspected (empty, greenfield)
@@ -51,6 +51,8 @@ Last updated: 2026-11-01 (session 7). Tests: 86 passing (crypto 17, shared 4, ap
 - [x] Project page: Play / Add tracks / Edit details; overlays for edit (incl. visibility + delete) and add tracks; sidebar project list
 - [x] Image scale-and-crop for profile picture and header (drag, zoom, pinch, keyboard)
 - [x] Motion: page view-transitions, shared cover transition, staggered lists, overlay/menu animations, tactile buttons (reduced-motion respected)
+- [x] Universal playback: player/projects/profile providers live above the router, music continues across every page (E2E)
+- [x] Mobile: cover-first project hero, single-row icon actions, calm rows, menus as bottom sheets; avatar picture in shell; smooth pointer-following drag with edge auto-scroll
 - [ ] Gapless (sample-accurate) playback
 - [ ] Version comparison (A/B), search (client-side)
 - [x] Library import from Samply / Untitled downloads (ADR-012): folder, ZIP or files; projects per folder, versions grouped by name markers, colour from cover art; review/rename before import; quota-aware; runs through the encrypted upload pipeline (unit tests + E2E)

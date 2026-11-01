@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type DragEvent, type KeyboardEvent, type MouseEvent, type PointerEvent } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type DragEvent, type KeyboardEvent, type MouseEvent, type PointerEvent } from 'react';
 import { api, errorMessage } from '../lib/api';
 import { formatBytes, formatTime } from '../lib/audio';
 import { useFlip } from '../lib/flip';
@@ -250,32 +250,79 @@ export function TracksSection({ project, addOpen, setAddOpen, onTracks }: { proj
     requestAnimationFrame(() => document.querySelector<HTMLButtonElement>(`[data-flip-id="${id}"] .drag-handle`)?.focus());
   };
 
+  // Re-place the dragged row synchronously after each reorder render (no one-frame jump).
+  const dragPlace = useRef<(() => void) | null>(null);
+  useLayoutEffect(() => {
+    dragPlace.current?.();
+  }, [tracks]);
+
+  /**
+   * Smooth drag: the row follows the pointer every frame; it swaps with a
+   * neighbour when its centre crosses that neighbour's midpoint (resting
+   * layout, not animated boxes); neighbours glide (FLIP); the page scrolls
+   * near the edges; on release the row settles into its slot.
+   */
   const startDrag = (id: string) => (e: PointerEvent<HTMLButtonElement>) => {
     if (!tracks || e.button !== 0) return;
     e.preventDefault();
+    const ol = listRef.current!;
+    const el = e.currentTarget.closest('li') as HTMLLIElement;
+    const grab = e.clientY - el.getBoundingClientRect().top;
     let list = [...tracks];
+    let pointerY = e.clientY;
+    let raf = 0;
+    el.style.transition = 'none';
     setDraggingId(id);
     document.body.classList.add('is-dragging');
-    // The list reorders live under the pointer; other rows glide (FLIP).
-    const onMove = (ev: globalThis.PointerEvent) => {
-      // Use resting layout (offsetTop), not animated boxes, or gliding rows would bounce the order back.
-      const ol = listRef.current!;
-      const y = ev.clientY - ol.getBoundingClientRect().top;
-      const rows = Array.from(ol.querySelectorAll<HTMLElement>(':scope > [data-flip-id]'));
-      const over = rows.findIndex((r) => y > r.offsetTop && y < r.offsetTop + r.offsetHeight);
-      const myIndex = list.findIndex((t) => t.id === id);
-      if (over >= 0 && over !== myIndex) {
-        const [moved] = list.splice(myIndex, 1);
-        list.splice(over, 0, moved!);
+
+    const place = () => {
+      const target = pointerY - ol.getBoundingClientRect().top - grab;
+      el.style.transform = `translateY(${target - el.offsetTop}px)`;
+      const rows = Array.from(ol.children) as HTMLElement[];
+      let i = list.findIndex((t) => t.id === id);
+      const centre = target + el.offsetHeight / 2;
+      let to = i;
+      while (to > 0 && centre < rows[to - 1]!.offsetTop + rows[to - 1]!.offsetHeight / 2) to--;
+      while (to < rows.length - 1 && centre > rows[to + 1]!.offsetTop + rows[to + 1]!.offsetHeight / 2) to++;
+      if (to !== i) {
+        const [moved] = list.splice(i, 1);
+        list.splice(to, 0, moved!);
         list = [...list];
+        i = to;
         setTracks(list);
       }
     };
+    dragPlace.current = place;
+
+    const loop = () => {
+      const edge = 72;
+      if (pointerY < edge) window.scrollBy(0, -Math.ceil((edge - pointerY) / 6));
+      else if (pointerY > window.innerHeight - edge) window.scrollBy(0, Math.ceil((pointerY - (window.innerHeight - edge)) / 6));
+      place();
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+
+    const onMove = (ev: globalThis.PointerEvent) => {
+      pointerY = ev.clientY;
+    };
     const onUp = () => {
+      cancelAnimationFrame(raf);
+      dragPlace.current = null;
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
       document.body.classList.remove('is-dragging');
-      setDraggingId(null);
+      // Settle into the slot.
+      el.style.transition = 'transform 0.22s cubic-bezier(.2,.7,.2,1)';
+      el.style.transform = 'translateY(0)';
+      const done = () => {
+        el.style.transition = '';
+        el.style.transform = '';
+        setDraggingId(null);
+      };
+      el.addEventListener('transitionend', done, { once: true });
+      setTimeout(done, 300);
       if (list.map((t) => t.id).join() !== tracks.map((t) => t.id).join()) {
         setAnnounce(`${list.find((t) => t.id === id)!.title} moved to position ${list.findIndex((t) => t.id === id) + 1}`);
         void persistOrder(list, id);
@@ -283,6 +330,7 @@ export function TracksSection({ project, addOpen, setAddOpen, onTracks }: { proj
     };
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
   };
 
   const uploads = jobs.length > 0 && (

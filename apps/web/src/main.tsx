@@ -6,6 +6,7 @@ import { AppShell, AppShellWith } from './components/AppShell';
 import { SessionProvider, useSession } from './lib/session';
 import { PlayerProvider } from './lib/player';
 import { ProjectsProvider } from './lib/projects';
+import { MeProvider } from './lib/me';
 import { Library, NotBuilt } from './pages/Library';
 import { NewProject } from './pages/NewProject';
 import { EditProfile } from './pages/EditProfile';
@@ -36,11 +37,24 @@ function ProfileRoute() {
   if (!user) return <PublicProfilePage />;
   if (!keys) return <Unlock />;
   return (
-    <ProjectsProvider>
+    <AppShellWith>
+      <ProfilePage />
+    </AppShellWith>
+  );
+}
+
+/**
+ * Signed-in state that must outlive page changes: projects, the player (so
+ * music keeps playing wherever you go) and your own profile. Keyed by user,
+ * so signing out tears everything down.
+ */
+function SignedIn({ children }: { children: ReactNode }) {
+  const { user, keys } = useSession();
+  if (!user || !keys) return <>{children}</>;
+  return (
+    <ProjectsProvider key={user.id}>
       <PlayerProvider>
-        <AppShellWith>
-          <ProfilePage />
-        </AppShellWith>
+        <MeProvider>{children}</MeProvider>
       </PlayerProvider>
     </ProjectsProvider>
   );
@@ -56,12 +70,13 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <AmbientProvider>
     <SessionProvider>
+      <SignedIn>
       <BrowserRouter>
         <Routes>
           <Route path="/signin" element={<GuestOnly><SignIn /></GuestOnly>} />
           <Route path="/register" element={<GuestOnly><Register /></GuestOnly>} />
           <Route path="/recover" element={<GuestOnly><Recover /></GuestOnly>} />
-          <Route element={<RequireAuth><ProjectsProvider><PlayerProvider><AppShell /></PlayerProvider></ProjectsProvider></RequireAuth>}>
+          <Route element={<RequireAuth><AppShell /></RequireAuth>}>
             <Route index element={<Library />} />
             <Route path="projects/new" element={<NewProject />} />
             <Route path="projects/:id" element={<ProjectPage />} />
@@ -75,6 +90,7 @@ createRoot(document.getElementById('root')!).render(
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
+      </SignedIn>
     </SessionProvider>
     </AmbientProvider>
   </StrictMode>,

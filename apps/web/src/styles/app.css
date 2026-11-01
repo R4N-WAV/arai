@@ -193,7 +193,7 @@ a:hover { text-decoration-color: currentColor; }
 .sleeve-meta { font-size: var(--fs-sm); color: var(--muted); text-transform: none; }
 .cover { position: relative; aspect-ratio: 1 / 1; border-radius: var(--r-xs); overflow: hidden; box-shadow: 0 22px 40px -26px rgb(0 0 0 / 0.95); isolation: isolate; }
 .cover::after { content: ""; position: absolute; inset: 0; opacity: 0.16; mix-blend-mode: multiply; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
-.cover-title { position: absolute; left: 12px; right: 12px; bottom: 10px; font: 600 0.8125rem/1.2 var(--font-ui); letter-spacing: 0.01em; z-index: 1; }
+.cover-title { position: absolute; left: 12px; right: 12px; bottom: 10px; text-align: left; font: 600 0.8125rem/1.2 var(--font-ui); letter-spacing: 0.01em; z-index: 1; }
 .cover-hero { width: 168px; flex: none; }
 .cover-hero .cover-title { font-size: 0.75rem; }
 .cover-thumb { width: 36px; }
@@ -475,3 +475,54 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .nav-project[aria-current="page"] { color: var(--text); background: rgb(255 255 255 / 0.06); }
 .nav-swatch { width: 14px; height: 14px; border-radius: 3px; flex: none; box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.1); }
 .nav-project-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---------- session 8: proportions, mobile, menu stacking ---------- */
+/* Entrance animations must not leave transforms behind (they create stacking contexts that cover popovers). */
+.content > *, .sleeves > li, .tracks > li, .list > li, .uploads > li { animation-fill-mode: backwards; }
+.track:has(.menu-list) { position: relative; z-index: 25; }
+.menu-list { background: #17161b; }
+
+.btn-icon-label svg { flex: none; }
+.mobile-avatar { display: inline-flex; border-radius: 50%; }
+.user-chip .avatar-img { width: 32px; height: 32px; }
+
+@media (max-width: 640px) {
+  /* Cover first: the artwork is the hero. */
+  .project-hero { flex-direction: column; align-items: center; text-align: center; gap: var(--s-5); margin-bottom: var(--s-6); }
+  .project-hero .cover-shared { width: min(78vw, 340px); }
+  .project-hero .cover-hero { width: 100%; }
+  .project-hero .cover-hero .cover-title { font-size: 0.875rem; left: 16px; bottom: 14px; }
+  .project-hero-text { flex-basis: auto; width: 100%; }
+  .project-hero-text h1 { font-size: 2rem; }
+  .project-meta { font-size: var(--fs-xs); }
+  .project-tags { justify-content: center; }
+  .project-actions { justify-content: center; flex-wrap: nowrap; gap: var(--s-2); margin-top: var(--s-4); }
+  .project-actions .btn { min-height: 44px; padding: 0 var(--s-4); }
+  .project-actions .btn-icon-label { width: 44px; padding: 0; }
+  .project-actions .btn-icon-label .btn-label { display: none; }
+  .project-actions .btn-primary { padding: 0 var(--s-6); }
+
+  /* Calm track rows: handle, number/play, title, length, menu. */
+  .track-row { grid-template-columns: 22px 34px minmax(0, 1fr) 40px 36px; gap: var(--s-2); min-height: 56px; padding: 0 var(--s-1); margin: 0; }
+  .track-row .track-time { display: block; font-size: var(--fs-xs); }
+  .track-row .version-badge { display: none; }
+  .track-main .row-sub, .track.active .track-main .row-sub, .track-row:hover .track-main .row-sub { display: none; }
+  .track-title { font-size: 0.9375rem; }
+  .drag-handle { width: 22px; opacity: 0.4; }
+  .track-play { width: 34px; height: 34px; }
+  .insights { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .version-head .btn { flex: 0 0 auto; }
+
+  /* Global mobile rhythm */
+  .content { padding-top: var(--s-4); }
+  .page-header { margin-bottom: var(--s-6); }
+  h1 { font-size: 2rem; }
+  .section { margin-bottom: var(--s-7); }
+  .mobile-bar { padding: var(--s-3) var(--s-4); }
+  .mobile-bar .btn-ghost { padding: 0 var(--s-3); }
+
+  /* Popovers become bottom sheets on phones. */
+  .menu-list { position: fixed; left: var(--s-3); right: var(--s-3); top: auto; bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + var(--s-3)); min-width: 0; padding: var(--s-2); border-radius: var(--r-md); transform-origin: bottom center; animation-name: sheet-in; z-index: 40; }
+  .menu-list button { min-height: 48px; font-size: var(--fs-md); }
+}
+@keyframes sheet-in { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: none; } }
