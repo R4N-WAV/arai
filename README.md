@@ -66,19 +66,22 @@ The site and API run on one Cloudflare Worker at a free
 `arai.<your-subdomain>.workers.dev` address. Every push to `main` is tested
 and deployed by `.github/workflows/deploy.yml`. One-time setup:
 
-1. **Cloudflare dashboard → Storage & Databases → D1 → Create database**,
-   name it `arai`, and copy its **Database ID**.
-2. **Cloudflare dashboard → Account home**: copy your **Account ID**
-   (right-hand side of the Workers & Pages overview).
-3. **My Profile → API Tokens → Create Token → "Edit Cloudflare Workers"
-   template**, then add the permission **Account · D1 · Edit**. Create it and
-   copy the token.
-4. **GitHub → R4N-WAV/arai → Settings → Secrets and variables → Actions**:
-   - Secrets: `CLOUDFLARE_API_TOKEN` (step 3), `CLOUDFLARE_ACCOUNT_ID` (step 2)
-   - Variables tab: `D1_DATABASE_ID` (step 1)
-5. Merge to `main` (or run the *Deploy* workflow manually). The first run
-   creates the server secrets inside Cloudflare automatically; the job log
-   prints the workers.dev URL.
+1. ~~Create the D1 database `arai`~~ — done; its id is in `apps/api/wrangler.jsonc`.
+2. **Account ID**: open https://dash.cloudflare.com and look at the address
+   bar. It reads `https://dash.cloudflare.com/<32 letters and digits>/home`;
+   that string is the Account ID. (Also shown under *Account details* on the
+   Account home page.)
+3. **API token**: https://dash.cloudflare.com/profile/api-tokens → *Create
+   Token* → *Edit Cloudflare Workers* → *Use template* → *+ Add more* and pick
+   **Account · D1 · Edit** → under *Account Resources* choose your account →
+   *Continue to summary* → *Create Token* → copy it (shown only once).
+4. **GitHub**: https://github.com/R4N-WAV/arai/settings/secrets/actions →
+   *New repository secret* twice: `CLOUDFLARE_ACCOUNT_ID` (step 2) and
+   `CLOUDFLARE_API_TOKEN` (step 3). Never paste the token anywhere else.
+5. **Deploy**: https://github.com/R4N-WAV/arai/actions → *Deploy* → *Run
+   workflow*. Later, every push to `main` deploys automatically. The first run
+   creates the server secrets inside Cloudflare; the *Deploy Worker* step log
+   prints the site's `workers.dev` address.
 
 Email verification and SMS 2FA are switched off (`FEATURE_EMAIL`,
 `FEATURE_SMS` in `apps/api/wrangler.jsonc`) and shown greyed out in the app

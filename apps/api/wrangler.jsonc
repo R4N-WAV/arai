@@ -17,8 +17,8 @@
     {
       "binding": "DB",
       "database_name": "arai",
-      // Replace with the id printed by `wrangler d1 create arai` before deploying.
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      // Production D1 database (ids are not secret).
+      "database_id": "a78a613a-439a-4551-8443-eda83662f32c",
       "migrations_dir": "migrations"
     }
   ],

@@ -1,9 +1,8 @@
 # Deploys Arai (SPA + API) to Cloudflare Workers on every push to main.
 #
 # One-time setup (see README "Deployment"):
-#   Repository secrets:   CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID
-#   Repository variable:  D1_DATABASE_ID   (id of the D1 database named "arai")
-# Until D1_DATABASE_ID is set this workflow is skipped.
+#   Repository secrets: CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID
+# Until CLOUDFLARE_API_TOKEN is set, the deploy steps are skipped.
 name: Deploy
 
 on:
@@ -20,7 +19,6 @@ concurrency:
 
 jobs:
   deploy:
-    if: ${{ vars.D1_DATABASE_ID != '' }}
     runs-on: ubuntu-latest
     environment: production
     env:
@@ -30,30 +28,42 @@ jobs:
       run:
         shell: bash
     steps:
+      - name: Check Cloudflare credentials are configured
+        id: gate
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "::notice::CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID secrets not set - skipping deploy."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
       - uses: actions/checkout@v4
+        if: steps.gate.outputs.ready == 'true'
       - uses: actions/setup-node@v4
+        if: steps.gate.outputs.ready == 'true'
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
-      - run: npm run typecheck
-      - run: npm test
+      - name: Install
+        if: steps.gate.outputs.ready == 'true'
+        run: npm ci
+      - name: Typecheck
+        if: steps.gate.outputs.ready == 'true'
+        run: npm run typecheck
+      - name: Test
+        if: steps.gate.outputs.ready == 'true'
+        run: npm test
       - name: Build web app
+        if: steps.gate.outputs.ready == 'true'
         run: npm run build -w @arai/web
 
-      - name: Point wrangler at the production D1 database
-        working-directory: apps/api
-        env:
-          D1_DATABASE_ID: ${{ vars.D1_DATABASE_ID }}
-        run: |
-          [[ "$D1_DATABASE_ID" =~ ^[0-9a-f-]{36}$ ]] || { echo "D1_DATABASE_ID is not a valid id"; exit 1; }
-          sed -i "s/00000000-0000-0000-0000-000000000000/$D1_DATABASE_ID/" wrangler.jsonc
-
       - name: Apply database migrations
+        if: steps.gate.outputs.ready == 'true'
         working-directory: apps/api
         run: npx wrangler d1 migrations apply arai --remote
 
       - name: Deploy Worker
+        if: steps.gate.outputs.ready == 'true'
         working-directory: apps/api
         run: npx wrangler deploy
 
@@ -62,6 +72,7 @@ jobs:
       # secrets are never overwritten: changing AUTH_PEPPER would invalidate
       # every password. If listing fails, the job fails instead of guessing.
       - name: Create missing server secrets
+        if: steps.gate.outputs.ready == 'true'
         working-directory: apps/api
         run: |
           set -euo pipefail
