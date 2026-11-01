@@ -30,13 +30,13 @@ a:hover { text-decoration-color: currentColor; }
 .home-link { display: inline-flex; color: var(--text); border-radius: var(--r-xs); }
 
 /* ---------- ambient background ---------- */
-.ambient { position: fixed; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; background: var(--void); }
+.ambient { position: fixed; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; background: var(--void); transform: translateZ(0); contain: strict; }
 .ambient-glow { position: absolute; width: 70vmax; height: 50vmax; margin: -25vmax 0 0 -35vmax; mix-blend-mode: screen; animation: seep 4.5s var(--ease) both, drift var(--d, 60s) ease-in-out infinite alternate; will-change: transform, opacity; }
 .ambient-glow[data-leaving="true"] { animation: unseep 3.5s var(--ease) both; }
 .ambient-glow svg { width: 100%; height: 100%; overflow: visible; }
 .ambient-mark { position: absolute; left: 50%; top: 12vh; width: 78vmin; margin-left: -39vmin; color: var(--text); opacity: 0.1; animation: settle 16s ease-in-out infinite; }
 .ambient-shade { position: absolute; inset: 0; background: linear-gradient(180deg, rgb(8 8 10 / 0) 0%, rgb(8 8 10 / 0.45) 60%, rgb(8 8 10 / 0.88) 100%); }
-.ambient-grain { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0.07; }
+.ambient-grain { position: absolute; inset: 0; background: url('/grain.png') repeat; background-size: 128px 128px; opacity: 0.55; }
 @keyframes seep { from { opacity: 0; transform: scale(0.82); } to { opacity: 1; transform: scale(1); } }
 @keyframes unseep { from { opacity: 1; } to { opacity: 0; transform: scale(1.08); } }
 @keyframes drift {
@@ -528,10 +528,12 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 @keyframes sheet-in { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: none; } }
 
 /* ---------- installed app (home screen) ---------- */
-html, body { overscroll-behavior: none; }
+/* Native rubber-band scrolling stays on: it is what makes scrolling feel right on iOS. */
 body { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
 /* Status bar overlays the page in standalone mode: keep content below it. */
-.mobile-bar { padding-top: max(var(--s-3), env(safe-area-inset-top)); position: sticky; top: 0; z-index: 15; background: linear-gradient(180deg, rgb(8 8 10 / 0.92) 0%, rgb(8 8 10 / 0.75) 70%, rgb(8 8 10 / 0)); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+/* Solid, crisp top bar (no backdrop blur: iOS smears it and it costs frames while scrolling); content fades softly under its edge. */
+.mobile-bar { padding-top: max(var(--s-3), env(safe-area-inset-top)); position: sticky; top: 0; z-index: 15; background: var(--void); }
+.mobile-bar::after { content: ""; position: absolute; left: 0; right: 0; top: 100%; height: 20px; background: linear-gradient(180deg, var(--void), rgb(8 8 10 / 0)); pointer-events: none; }
 .auth, .public-bar { padding-top: max(var(--s-5), env(safe-area-inset-top)); }
 .content, .public-bar, .mobile-bar { padding-left: max(var(--s-4), env(safe-area-inset-left)); padding-right: max(var(--s-4), env(safe-area-inset-right)); }
 @media (min-width: 1024px) { .content { padding-left: clamp(var(--s-5), 4vw, var(--s-8)); padding-right: clamp(var(--s-5), 4vw, var(--s-8)); } }
@@ -545,3 +547,15 @@ body { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
 .mobile-bar-left { display: flex; align-items: center; gap: var(--s-1); min-width: 0; }
 @media (max-width: 1023px) { .content-back { display: none; } }
 @media (min-width: 1024px) { .mobile-back { display: none; } }
+
+/* ---------- smooth scrolling on phones ---------- */
+.ambient-glow.lite { border-radius: 50%; mix-blend-mode: normal; }
+.modal-body, .nav-projects, .menu-list { -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+@media (max-width: 1023px), (pointer: coarse) {
+  /* Blurs behind fixed elements are re-rendered on every scroll frame on iOS: use solid surfaces instead. */
+  .player { backdrop-filter: none; -webkit-backdrop-filter: none; background: rgb(18 17 22 / 0.97); }
+  .tabbar { backdrop-filter: none; -webkit-backdrop-filter: none; background: var(--void); }
+  .modal::backdrop { backdrop-filter: none; background: rgb(4 4 6 / 0.72); }
+  .cover::after { display: none; }
+  .ambient-glow { will-change: transform; }
+}

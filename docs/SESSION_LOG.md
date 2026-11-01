@@ -51,3 +51,9 @@
 ## Session 9 — 2026-11-02
 - Owner: home-screen app showed Safari bars; no back button on mobile. Added manifest (display standalone), apple-mobile-web-app meta + black-translucent status bar, generated icons (180/192/512 + maskable) from the outlined அ, viewport-fit=cover with safe-area padding, overscroll none; Back button (mobile bar + desktop content) on non-tab routes; creating a project replaces the form in history. E2E covers manifest and back navigation.
 - Note for users: an app added before this deploy must be removed and re-added from the home screen; installed apps keep their own sign-in (separate from Safari).
+
+## Session 10 — 2026-11-02
+- Owner (home-screen screenshot): blur smearing content at the top, choppy/rigid scrolling.
+- Cause: the sticky mobile bar used `backdrop-filter` under the translucent status bar, and every scroll frame re-composited full-screen SVG displacement filters + live feTurbulence grain behind it; `overscroll-behavior: none` removed iOS rubber-band, so scrolling felt hard.
+- Fix: solid top bar with a short fade below it; native bounce restored; on phones/coarse pointers the ambient glows are plain CSS radial gradients (no SVG filters, normal blending) and the grain is a static 128 px tile (`scripts/build-grain.mjs`); ambient layer promoted to its own compositor layer (`contain: strict`); no backdrop blur on the player, tab bar or overlay backdrop on phones; momentum scrolling in overlays, menus and the project list.
+- Verified: typecheck, 86 unit/API tests, all 4 E2E flows; mobile screenshots at 390×844.

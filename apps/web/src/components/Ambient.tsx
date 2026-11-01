@@ -39,7 +39,11 @@ export function AmbientProvider({ children }: { children: ReactNode }) {
   );
 }
 
+const lite = () => typeof window !== 'undefined' && window.matchMedia('(pointer: coarse), (max-width: 1023px)').matches;
+
 export function AmbientBackground({ hexes }: { hexes: string[] }) {
+  // Phones get the same look without live SVG filters, so scrolling stays smooth.
+  const [isLite] = useState(lite);
   const target = useMemo(() => ambientPalette(hexes), [hexes]);
   const [shown, setShown] = useState<Shown[]>([]);
   const timers = useRef<number[]>([]);
@@ -72,8 +76,8 @@ export function AmbientBackground({ hexes }: { hexes: string[] }) {
           '--d': `${52 + (g.hue % 5) * 9}s`,
         } as React.CSSProperties;
         return (
-          <div key={g.key} className="ambient-glow" data-leaving={g.leaving} style={style}>
-            <svg viewBox="0 0 700 500" preserveAspectRatio="none">
+          <div key={g.key} className={isLite ? 'ambient-glow lite' : 'ambient-glow'} data-leaving={g.leaving} style={isLite ? { ...style, background: `radial-gradient(closest-side, ${g.color.replace(')', ` / ${live > 3 ? 0.4 : 0.52})`)} 0%, transparent 100%)` } : style}>
+            {!isLite && <svg viewBox="0 0 700 500" preserveAspectRatio="none">
               <defs>
                 <filter id={`paint-${g.key}`} x="-40%" y="-40%" width="180%" height="180%">
                   <feTurbulence type="fractalNoise" baseFrequency="0.006" numOctaves="3" seed={(g.hue % 97) + 1} />
@@ -82,18 +86,12 @@ export function AmbientBackground({ hexes }: { hexes: string[] }) {
                 </filter>
               </defs>
               <ellipse cx="350" cy="250" rx="250" ry="150" fill={g.color} opacity={live > 3 ? 0.5 : 0.62} filter={`url(#paint-${g.key})`} />
-            </svg>
+            </svg>}
           </div>
         );
       })}
       <div className="ambient-shade" />
-      <svg className="ambient-grain">
-        <filter id="ambient-grain">
-          <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" stitchTiles="stitch" />
-          <feColorMatrix type="saturate" values="0" />
-        </filter>
-        <rect width="100%" height="100%" filter="url(#ambient-grain)" />
-      </svg>
+      <div className="ambient-grain" />
     </div>
   );
 }
