@@ -1,0 +1,23 @@
+{
+  "name": "@arai/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "test": "vitest run",
+    "typecheck": "tsc -p .",
+    "db:migrate:local": "wrangler d1 migrations apply arai --local"
+  },
+  "dependencies": {
+    "hono": "4.13.16",
+    "zod": "^4.1.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20251101.0",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.0",
+    "wrangler": "4.156.0",
+    "@cloudflare/vitest-plugin": "1.4.11"
+  }
+}

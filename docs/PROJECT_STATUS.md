@@ -1,6 +1,6 @@
 # Project Status — authoritative checklist
 
-Last updated: 2026-11-01 (session 1). `[x]` done & tested · `[~]` in progress · `[ ]` not started · `[!]` blocked.
+Last updated: 2026-11-01 (end of session 1). Tests: 23 passing (crypto 13, api 10). `[x]` done & tested · `[~]` in progress · `[ ]` not started · `[!]` blocked.
 
 ## Phase 0 — Research & architecture
 - [x] Repository inspected (empty, greenfield)
@@ -13,10 +13,11 @@ Last updated: 2026-11-01 (session 1). `[x]` done & tested · `[~]` in progress �
 - [x] Financial limitations documented — `ARCHITECTURE.md §6`, `REMAINING_TO_V1.md`
 
 ## Phase 1 — Technical foundation
-- [ ] Monorepo scaffold (npm workspaces, TS strict, ESLint, Vitest, CI workflow)
-- [ ] Worker + Hono + security headers/CSP + static assets
-- [ ] D1 migration 0001 (identity, sessions, tokens, rate limits, audit log)
-- [ ] `packages/crypto`: Argon2id KDF, HKDF split, vault wrap/unwrap, keypairs (+ tests)
+- [~] Monorepo scaffold — npm workspaces, TS strict, Vitest, CI + Dependabot done; ESLint not yet added
+- [~] Worker + Hono + security headers/CSP + origin/CSRF guard + body limit + opaque errors (tested); static assets serving waits for `apps/web`
+- [x] D1 migration 0001 (identity, credentials, vaults, keys, sessions, tokens, MFA, rate limits, platform roles, audit log) — DB-level uniqueness/format/single-owner/append-only tested
+- [x] Hash-chained audit log (`apps/api/src/lib/audit.ts`) + tamper tests
+- [x] `packages/crypto`: Argon2id KDF w/ downgrade floor, HKDF split, AEAD blobs w/ context binding, vault wrap/unwrap, recovery key codec, sealed boxes, signatures, fingerprints, chunked random-access file encryption (13 tests)
 - [ ] Prelogin / register / verify email / login / logout / sessions API (+ tests incl. enumeration parity)
 - [ ] Rate limiting + Turnstile + honeypot
 - [ ] Email provider adapter (console adapter in dev, clearly labelled)

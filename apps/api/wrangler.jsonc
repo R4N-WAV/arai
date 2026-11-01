@@ -1,0 +1,24 @@
+{
+  // Arai Worker: serves the SPA (assets) and /api on one origin.
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "arai",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "arai",
+      // Replace with the id printed by `wrangler d1 create arai` before deploying.
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "vars": {
+    "APP_ORIGIN": "http://localhost:8787",
+    "EMAIL_PROVIDER": "console"
+  }
+  // Secrets (wrangler secret put / .dev.vars, never committed):
+  // AUTH_PEPPER, KDF_SALT_SECRET, IP_HMAC_SECRET, TURNSTILE_SECRET, EMAIL_API_KEY
+}
