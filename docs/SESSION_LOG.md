@@ -5,3 +5,12 @@
 - Phase 1 started: npm workspaces; `packages/crypto` (libsodium) with 13 tests; `apps/api` Worker (Hono) with security headers, CSRF/origin guard, body limit, opaque errors; migration 0001; hash-chained audit log; 10 Workers-runtime tests (Miniflare D1).
 - Bug found by tests and fixed: username CHECK used a GLOB that only validated the first character.
 - Tooling notes: npm 10.9 arborist crashes on vitest's optional peers → `.npmrc legacy-peer-deps=true`. `@cloudflare/vitest-pool-workers` is deprecated → use `@cloudflare/vitest-plugin`.
+
+## Session 2 — 2026-11-01
+- Owner decisions: has a Cloudflare account; domain later; email verification and SMS 2FA deferred → grey out. Proposed GitHub Pages; chose workers.dev + GitHub Actions deploy instead (ADR-008, cookies would be third-party on Pages).
+- Built auth API (register, prelogin, login, logout, session, sessions list/revoke, login history, email-less recovery-key reset), `@arai/shared` contract, provider feature flags + `/api/config` (ADR-009).
+- Schema change (pre-deploy, edited 0001 in place): status defaults to active; email unique only when verified; `recovery_auth_hash`.
+- Built `apps/web`: tokens/CSS, app shell (sidebar / mobile tab bar), sign in, register with recovery-key step, unlock-after-reload, recover, settings with greyed-out email/SMS features. Argon2id runs in a Web Worker.
+- CSRF origin check now compares with the request's own origin (no APP_ORIGIN config).
+- Tests: crypto 14, api 33, browser E2E 10 steps — all green. Deploy workflow added (inactive until secrets/variable set).
+- Gotcha: `pkill -f <pattern>` in a Bash call kills the calling shell if the pattern appears in the command; run `wrangler dev` with run_in_background instead.

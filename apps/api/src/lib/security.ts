@@ -43,8 +43,11 @@ const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
  */
 export const originGuard: MiddlewareHandler<AppBindings> = async (c, next) => {
   if (!SAFE_METHODS.has(c.req.method)) {
+    // The SPA and API share one origin, so the browser-sent Origin must equal
+    // the origin this request was addressed to (works on workers.dev and any
+    // future custom domain without configuration).
     const origin = c.req.header('Origin');
-    if (origin !== c.env.APP_ORIGIN || c.req.header('X-Arai-CSRF') !== '1') {
+    if (origin !== new URL(c.req.url).origin || c.req.header('X-Arai-CSRF') !== '1') {
       return c.json({ error: 'forbidden_origin' }, 403);
     }
   }

@@ -42,8 +42,47 @@ npm install
 npm test
 ```
 
-Setup for local Worker development (`wrangler dev`) and deployment will be
-documented here as Phase 1 lands. Never commit `.dev.vars`, `.env` or any secret.
+### Run locally
+
+```bash
+printf 'AUTH_PEPPER=%s\nKDF_SALT_SECRET=%s\nIP_HMAC_SECRET=%s\n' $(openssl rand -hex 32) $(openssl rand -hex 32) $(openssl rand -hex 32) > apps/api/.dev.vars
+```
+
+```bash
+npm run build -w @arai/web && cd apps/api && npx wrangler d1 migrations apply arai --local && npx wrangler dev
+```
+
+Open http://localhost:8787. Browser end-to-end check (with the server running):
+
+```bash
+node apps/web/e2e/auth-flow.mjs
+```
+
+Never commit `.dev.vars`, `.env` or any secret.
+
+## Deployment (Cloudflare, from GitHub)
+
+The site and API run on one Cloudflare Worker at a free
+`arai.<your-subdomain>.workers.dev` address. Every push to `main` is tested
+and deployed by `.github/workflows/deploy.yml`. One-time setup:
+
+1. **Cloudflare dashboard → Storage & Databases → D1 → Create database**,
+   name it `arai`, and copy its **Database ID**.
+2. **Cloudflare dashboard → Account home**: copy your **Account ID**
+   (right-hand side of the Workers & Pages overview).
+3. **My Profile → API Tokens → Create Token → "Edit Cloudflare Workers"
+   template**, then add the permission **Account · D1 · Edit**. Create it and
+   copy the token.
+4. **GitHub → R4N-WAV/arai → Settings → Secrets and variables → Actions**:
+   - Secrets: `CLOUDFLARE_API_TOKEN` (step 3), `CLOUDFLARE_ACCOUNT_ID` (step 2)
+   - Variables tab: `D1_DATABASE_ID` (step 1)
+5. Merge to `main` (or run the *Deploy* workflow manually). The first run
+   creates the server secrets inside Cloudflare automatically; the job log
+   prints the workers.dev URL.
+
+Email verification and SMS 2FA are switched off (`FEATURE_EMAIL`,
+`FEATURE_SMS` in `apps/api/wrangler.jsonc`) and shown greyed out in the app
+until providers are configured.
 
 ## Licence
 

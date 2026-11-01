@@ -8,7 +8,6 @@ export default defineConfig({
       miniflare: {
         bindings: {
           TEST_MIGRATIONS: await readD1Migrations('./migrations'),
-          APP_ORIGIN: 'https://arai.test',
           // Test-only secrets; production values are set via `wrangler secret put`.
           AUTH_PEPPER: 'test-pepper',
           KDF_SALT_SECRET: 'test-kdf-salt-secret',

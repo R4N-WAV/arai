@@ -127,6 +127,9 @@ auth.post('/auth/register', async (c) => {
     if (String(e).includes('UNIQUE')) return c.json({ error: 'username_taken' }, 409);
     throw e;
   }
+  await c.env.DB.prepare('INSERT INTO login_events (id, user_id, at, success, ip_hmac, ua_summary, reason) VALUES (?, ?, ?, 1, ?, ?, ?)')
+    .bind(randomId(), userId, now, ip, uaSummary(c), 'registered')
+    .run();
   await createSession(c, userId);
   return c.json({ ok: true }, 201);
 });

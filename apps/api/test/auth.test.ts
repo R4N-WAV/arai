@@ -176,7 +176,7 @@ describe('prelogin and login', () => {
   it('flags a login from a new device/network', async () => {
     const { reg } = await registered('travellr');
     const first = await new Client().call('POST', '/auth/login', { identifier: 'travellr', authKey: reg.authKeyUsername });
-    expect(first.json.newDevice).toBe(false); // no history yet
+    expect(first.json.newDevice).toBe(false); // same browser as registration
     const c = new Client();
     c.ip = '203.0.113.200';
     const r = await exports.default.fetch(
@@ -238,7 +238,7 @@ describe('sessions', () => {
     await c.call('POST', '/auth/login', { identifier: 'histuser', authKey: rand() });
     await c.call('POST', '/auth/login', { identifier: 'histuser', authKey: reg.authKeyUsername });
     const h = await c.call('GET', '/account/login-history');
-    expect(h.json.events.map((e: any) => e.success)).toEqual([true, false]);
+    expect(h.json.events.map((e: any) => e.success)).toEqual([true, false, true]); // login, failure, registration
   });
 
   it('requires authentication for account endpoints', async () => {

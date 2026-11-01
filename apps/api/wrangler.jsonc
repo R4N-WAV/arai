@@ -6,6 +6,13 @@
   "compatibility_date": "2026-10-01",
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true },
+  // The SPA build is served as static assets; only /api/* runs the Worker.
+  // Static responses get security headers from apps/web/public/_headers.
+  "assets": {
+    "directory": "../web/dist",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
   "d1_databases": [
     {
       "binding": "DB",
@@ -16,11 +23,10 @@
     }
   ],
   "vars": {
-    "APP_ORIGIN": "http://localhost:8787",
     "FEATURE_EMAIL": "off",
     "FEATURE_SMS": "off",
     "REQUIRE_TURNSTILE": "false"
   }
   // Secrets (wrangler secret put / .dev.vars, never committed):
-  // AUTH_PEPPER, KDF_SALT_SECRET, IP_HMAC_SECRET, TURNSTILE_SECRET, EMAIL_API_KEY
+  // AUTH_PEPPER, KDF_SALT_SECRET, IP_HMAC_SECRET, optional TURNSTILE_SECRET
 }

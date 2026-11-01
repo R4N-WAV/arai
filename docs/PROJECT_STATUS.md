@@ -1,6 +1,6 @@
 # Project Status — authoritative checklist
 
-Last updated: 2026-11-01 (end of session 1). Tests: 23 passing (crypto 13, api 10). `[x]` done & tested · `[~]` in progress · `[ ]` not started · `[!]` blocked.
+Last updated: 2026-11-01 (session 2). Tests: 47 passing (crypto 14, api 33) + browser E2E auth flow (`apps/web/e2e/auth-flow.mjs`). `[x]` done & tested · `[~]` in progress · `[ ]` not started · `[!]` blocked.
 
 ## Phase 0 — Research & architecture
 - [x] Repository inspected (empty, greenfield)
@@ -18,13 +18,19 @@ Last updated: 2026-11-01 (end of session 1). Tests: 23 passing (crypto 13, api 1
 - [x] D1 migration 0001 (identity, credentials, vaults, keys, sessions, tokens, MFA, rate limits, platform roles, audit log) — DB-level uniqueness/format/single-owner/append-only tested
 - [x] Hash-chained audit log (`apps/api/src/lib/audit.ts`) + tamper tests
 - [x] `packages/crypto`: Argon2id KDF w/ downgrade floor, HKDF split, AEAD blobs w/ context binding, vault wrap/unwrap, recovery key codec, sealed boxes, signatures, fingerprints, chunked random-access file encryption (13 tests)
-- [ ] Prelogin / register / verify email / login / logout / sessions API (+ tests incl. enumeration parity)
-- [ ] Rate limiting + Turnstile + honeypot
-- [ ] Email provider adapter (console adapter in dev, clearly labelled)
-- [ ] Password reset with recovery-key flow and data-loss acknowledgement
-- [ ] 2FA: email OTP, recovery codes; SMS adapter (disabled without provider)
-- [ ] Settings: sessions list/revoke, login history, password/email/username change
-- [ ] Web shell: tokens, layout (desktop/tablet/mobile), auth screens, axe tests
+- [x] Prelogin / register / login / logout / session API with enumeration parity, cookie hardening, expiry, new-device flag (tests)
+- [x] Rate limiting (per IP-HMAC + per account) + honeypot (tests); Turnstile adapter written, **not yet configured** (owner: add keys)
+- [x] Password reset with recovery key (email-less) + data-loss acknowledgement at signup (tests + E2E)
+- [x] Settings: sessions list/revoke/revoke-others, login history, key fingerprint (tests + E2E)
+- [x] Web shell: tokens, desktop sidebar / mobile tab bar, sign in, register (recovery key step), unlock, recover, settings (E2E at 1280 & 375 px)
+- [x] Provider-gated features greyed out via `/api/config` (ADR-009)
+- [x] Deploy pipeline GitHub -> Cloudflare (`deploy.yml`) — **inactive until owner sets secrets/variable**
+- [!] Email verification, email sign-in, email reset, email OTP — blocked: email provider + domain (deferred by owner)
+- [!] SMS 2FA — blocked: paid SMS provider (deferred by owner)
+- [ ] 2FA recovery codes (only meaningful once a 2FA method exists)
+- [ ] Password change (signed in), username change, email change
+- [ ] ESLint; axe accessibility checks in E2E; lazy-load crypto (main bundle 905 kB / 304 kB gz)
+- [ ] Account export & deletion
 
 ## Phase 2 — Music workspace
 - [ ] Projects CRUD (encrypted meta), folders, ordering (+ keyboard alternative)

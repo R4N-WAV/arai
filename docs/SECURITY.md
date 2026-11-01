@@ -90,7 +90,12 @@ long-term key, which re-seals project keys to the new device).
 
 ## 4. Recovery strategy (no backdoor)
 
-- Forgotten password + recovery key → full restore.
+- Forgotten password + recovery key → full restore, **no email needed**
+  (implemented): the client derives `recoveryAuthKey = HKDF(recoveryKey,
+  "arai/recovery-auth/v1")`; the server stores `HMAC(pepper, recoveryAuthKey)`.
+  Step 1 returns the recovery-wrapped ASK on proof; step 2 stores new password
+  salts/hashes and new ASK wraps, revokes all sessions, writes an audit entry.
+  Rate-limited per IP and per username.
 - Forgotten password, **no** recovery key → email reset restores the
   *account* (profile, follows, memberships) but **all encrypted content
   previously only accessible by this user is permanently lost**. Collaborators
@@ -119,6 +124,13 @@ Zero-access encryption does **not** protect against:
 - a malicious server serving modified JavaScript (inherent to web apps) —
   mitigated by open source, reproducible builds and CSP; not eliminated;
 - metadata analysis (who collaborates with whom, file sizes, timing).
+
+Temporary limitations while email delivery is off (ADR-009): no email
+verification (so the email on an account is unproven), no email sign-in, no
+email/SMS 2FA, no login alerts by email, and no email reset. Bot protection
+currently relies on rate limits + honeypot; Turnstile is wired but needs
+`TURNSTILE_SECRET`/`TURNSTILE_SITE_KEY` + `REQUIRE_TURNSTILE=true` (free, no
+domain needed) — recommended before public launch.
 
 Other limitations: private content is not server-searchable (client-side
 search only); SMS 2FA requires a paid provider; streaming permission implies

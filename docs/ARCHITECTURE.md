@@ -21,8 +21,10 @@ Cloudflare Worker "arai"  ──────────────────
   └─ Email provider (HTTP API, e.g. Resend/Brevo) ; SMS provider (optional, paid)
 ```
 
-- **Single origin**: the Worker serves the SPA and `/api`. No CORS for the app,
-  strict CSP, cookies `SameSite=Strict`.
+- **Single origin**: the Worker serves the SPA (static assets, headers from
+  `apps/web/public/_headers`) and `/api`. No CORS, strict CSP, cookies
+  `SameSite=Strict`. Hosted at the free `arai.<subdomain>.workers.dev` until a
+  custom domain exists (ADR-008). GitHub Actions deploys on push to `main`.
 - **Zero-access**: private project metadata (names, descriptions, track titles,
   comments), audio, artwork, waveforms, messages and attachments are encrypted
   in the browser before upload. The server stores ciphertext plus the minimum
@@ -74,8 +76,13 @@ docs/           authoritative documentation
    7 days, absolute 30 days, rotation on privilege change.
 5. Client fetches its encrypted vault and decrypts with `vaultKey`
    (private keys never leave the browser unencrypted).
-6. State-changing requests require same-origin `Origin` header and
-   `X-Arai-CSRF: 1` header (defence in depth with SameSite=Strict).
+6. State-changing requests require an `Origin` header equal to the request's
+   own origin and `X-Arai-CSRF: 1` (defence in depth with SameSite=Strict).
+7. Decrypted keys live only in memory. After a reload the session is still
+   valid but the UI shows an Unlock screen; the password re-derives the vault
+   key locally (`GET /api/auth/session` returns the encrypted vault).
+8. While email delivery is off (ADR-009) users sign in with their username;
+   email sign-in only works for verified emails.
 
 ## 5. Data model (D1)
 
@@ -140,9 +147,9 @@ Migrations live in `apps/api/migrations/NNNN_name.sql` (wrangler D1 migrations).
 | R2 | 10 GB-month, 1M class A, 10M class B ops/month, no egress fees | **Main constraint**: ~200 long WAV files. Per-user quota default 1 GB (configurable). Beyond 10 GB: $0.015/GB-month. |
 | Durable Objects (SQLite) | 100k requests/day, 13k GB-s/day | Realtime chat/presence for small community. |
 | Turnstile | free | bot challenge |
-| Email (Resend free: 3,000/mo, 100/day; Brevo free: 300/day) | free | **Requires a sending domain** you control for deliverability → domain ≈ $10/yr is the only practically unavoidable cost. |
+| Email (Resend free: 3,000/mo, 100/day; Brevo free: 300/day) | free | **Deferred** (ADR-009). Requires a sending domain (≈ $10/yr) for deliverability. |
 | SMS (Twilio etc.) | **no free production tier** | SMS 2FA implemented behind provider interface, disabled until configured & paid. |
-| Hosting domain | `*.workers.dev` free | Custom domain optional (same domain as email). |
+| Hosting domain | `*.workers.dev` free | Used now (ADR-008). Custom domain later, no code changes. |
 
 ## 7. Audio pipeline
 
@@ -203,3 +210,20 @@ ticket from `/api/realtime/ticket` (cookie-authenticated), validated by the DO.
   through `wrangler d1 execute` with the operator's Cloudflare credentials; it
   only succeeds if no platform owner exists and writes an audit entry. No
   HTTP endpoint can create platform roles from nothing.
+- **ADR-008 Host on workers.dev, deploy from GitHub; not GitHub Pages.**
+  (2026-11-01) Owner first proposed GitHub Pages. Rejected: github.io and
+  workers.dev are different sites, so session cookies become third-party and
+  are blocked by Safari/Firefox by default; Pages also cannot send security
+  headers (CSP frame-ancestors, HSTS, nosniff). Instead the Worker serves the
+  SPA on the free workers.dev subdomain and `.github/workflows/deploy.yml`
+  deploys on push to `main`. Server secrets are generated in the deploy job on
+  first run and stored only in Cloudflare.
+- **ADR-009 Provider-gated features are flagged off and greyed out.**
+  (2026-11-01) Email delivery and SMS are postponed by the owner.
+  `FEATURE_EMAIL` / `FEATURE_SMS` (wrangler vars, default `off`) are exposed via
+  `GET /api/config`; the UI renders dependent features (verify email, email
+  sign-in, email reset, email OTP, SMS OTP) disabled with a "Not available yet"
+  badge. Consequences, by design: accounts are active without verification;
+  emails are unique only once verified (partial unique index) so unverified
+  addresses can't be squatted or enumerated; password reset works without
+  email via the recovery key (`/api/auth/recover/challenge` + `/recover`).

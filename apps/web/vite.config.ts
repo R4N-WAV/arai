@@ -1,0 +1,11 @@
+import react from '@vitejs/plugin-react';
+import { defineConfig } from 'vite';
+
+// In development the API runs under `wrangler dev` (port 8787); Vite proxies
+// /api so the app stays same-origin exactly as in production.
+export default defineConfig({
+  plugins: [react()],
+  server: { proxy: { '/api': { target: 'http://localhost:8787', changeOrigin: false } } },
+  worker: { format: 'es' },
+  build: { target: 'es2022', sourcemap: false },
+});

@@ -1,6 +1,5 @@
 export interface Env {
   DB: D1Database;
-  APP_ORIGIN: string;
   /** Provider-gated features. "on" only once a real provider is configured. */
   FEATURE_EMAIL: 'on' | 'off';
   FEATURE_SMS: 'on' | 'off';

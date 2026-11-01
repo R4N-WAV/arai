@@ -16,4 +16,5 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
+      - run: npm run build -w @arai/web
       - run: npm audit --omit=dev --audit-level=high
