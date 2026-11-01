@@ -2,6 +2,7 @@ import { createProjectRequest, updateProjectRequest, type ProjectDto } from '@ar
 import { Hono } from 'hono';
 import { fromB64, toB64 } from '../lib/crypto.js';
 import { requireProjectRole } from '../lib/projects.js';
+import { purgeFiles } from './tracks.js';
 import { rateLimit } from '../lib/ratelimit.js';
 import { requireUser, type AuthedBindings } from '../lib/session.js';
 import { parseBody } from '../lib/validate.js';
@@ -141,6 +142,8 @@ projects.delete('/projects/:id', async (c) => {
   }
   // Soft delete: hidden everywhere immediately; public copy withdrawn.
   await c.env.DB.prepare("UPDATE projects SET deleted_at = ?, visibility = 'private', public_meta = NULL, published_at = NULL WHERE id = ?").bind(Date.now(), id).run();
+  const files = await c.env.DB.prepare("SELECT id FROM files WHERE project_id = ? AND status != 'deleted'").bind(id).all<{ id: string }>();
+  await purgeFiles(c.env, c.executionCtx, id, files.results.map((f) => f.id));
   return c.json({ ok: true });
 });
 

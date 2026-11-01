@@ -102,6 +102,17 @@ Nothing is sent to the server. Script running in the tab could already use
 the in-memory keys, so this adds no XSS exposure; the raw key bytes can never
 be read out of the browser (`apps/web/src/lib/tabvault.ts`).
 
+### 3.6 Audio files (implemented)
+Per-file random key, wrapped with the project key (`file/<id>/key` context).
+Chunks are XChaCha20-Poly1305 with AAD = file id ‖ index ‖ last-flag, so
+reordering, swapping between files and truncation fail to decrypt. The server
+enforces the declared chunk layout exactly (every chunk's size is checked),
+per-user and platform quotas, uploader-only writes, editor+ to upload,
+listener+ to download, admin+ to delete; unfinished files are never served.
+Format checks (magic bytes) run in the browser because the server only sees
+ciphertext; the E2E test asserts no uploaded chunk contains a WAV header.
+CSP `connect-src` allows `blob:` (same-origin object URLs only).
+
 ## 4. Recovery strategy (no backdoor)
 
 - Forgotten password + recovery key → full restore, **no email needed**

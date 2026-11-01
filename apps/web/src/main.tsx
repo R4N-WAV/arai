@@ -4,6 +4,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router';
 import { AmbientProvider } from './components/Ambient';
 import { AppShell } from './components/AppShell';
 import { SessionProvider, useSession } from './lib/session';
+import { PlayerProvider } from './lib/player';
 import { ProjectsProvider } from './lib/projects';
 import { Library, NotBuilt } from './pages/Library';
 import { NewProject } from './pages/NewProject';
@@ -38,7 +39,7 @@ createRoot(document.getElementById('root')!).render(
           <Route path="/signin" element={<GuestOnly><SignIn /></GuestOnly>} />
           <Route path="/register" element={<GuestOnly><Register /></GuestOnly>} />
           <Route path="/recover" element={<GuestOnly><Recover /></GuestOnly>} />
-          <Route element={<RequireAuth><ProjectsProvider><AppShell /></ProjectsProvider></RequireAuth>}>
+          <Route element={<RequireAuth><ProjectsProvider><PlayerProvider><AppShell /></PlayerProvider></ProjectsProvider></RequireAuth>}>
             <Route index element={<Library />} />
             <Route path="projects/new" element={<NewProject />} />
             <Route path="projects/:id" element={<ProjectPage />} />

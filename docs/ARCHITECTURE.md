@@ -144,7 +144,8 @@ Migrations live in `apps/api/migrations/NNNN_name.sql` (wrangler D1 migrations).
 |---|---|---|
 | Workers | 100k requests/day, 10 ms CPU/request | Audio bytes never pass through the Worker (presigned R2 URLs). Heavy crypto runs client-side. |
 | D1 | 5 GB, 5M rows read/day, 100k rows written/day | Fine for early users; queries over limit fail → monitor. |
-| R2 | 10 GB-month, 1M class A, 10M class B ops/month, no egress fees | **Main constraint**: ~200 long WAV files. Per-user quota default 1 GB (configurable). Beyond 10 GB: $0.015/GB-month. |
+| R2 | 10 GB free but **requires a card on file** | Not used (ADR-011). |
+| Durable Objects SQLite storage | 5 GB total on the free plan, no card | Encrypted audio (ADR-011): 4.5 GB platform cap, 500 MB/user. |
 | Durable Objects (SQLite) | 100k requests/day, 13k GB-s/day | Realtime chat/presence for small community. |
 | Turnstile | free | bot challenge |
 | Email (Resend free: 3,000/mo, 100/day; Brevo free: 300/day) | free | **Deferred** (ADR-009). Requires a sending domain (≈ $10/yr) for deliverability. |
@@ -235,3 +236,14 @@ ticket from `/api/realtime/ticket` (cookie-authenticated), validated by the DO.
   before use and verify their own grants against the locally held signing key.
   Outsiders get 404 for any project (existence never leaks); members lacking
   a role get 403.
+- **ADR-011 Audio in free-plan Durable Objects, not R2.** (2026-11-01)
+  The owner does not want any service that can charge a card automatically;
+  R2 requires a payment method. Encrypted 1 MiB chunks are stored in a
+  SQLite-backed Durable Object (`FileStore`, one per project; free plan, no
+  card, hard limits instead of bills). Chunks go through the Worker (no
+  presigned URLs), so each chunk costs one Worker + one DO request (free:
+  100k/day each). Capacity: 5 GB total → platform cap 4.5 GB
+  (`PLATFORM_QUOTA_BYTES`), 500 MB per user (`USER_QUOTA_BYTES`), 250 MB per
+  file. Playback currently downloads + decrypts the whole file into a blob URL
+  (byte-exact, lossless); Service-Worker range streaming is a later
+  optimisation. Storage sits behind `FileStore` so R2/B2 can replace it later.

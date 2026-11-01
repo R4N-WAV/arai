@@ -2,6 +2,8 @@ import { NavLink, Outlet } from 'react-router';
 import { useSession } from '../lib/session';
 import { IconDiscover, IconLibrary, IconMessages, IconSettings } from './Icons';
 import { HomeLink } from './Logo';
+import { PlayerBar } from './PlayerBar';
+import { usePlayer } from '../lib/player';
 
 const NAV = [
   { to: '/', label: 'Library', icon: IconLibrary, end: true },
@@ -12,6 +14,7 @@ const NAV = [
 
 export function AppShell() {
   const { user, signOut } = useSession();
+  const { item } = usePlayer();
   const initial = user?.username.slice(0, 1).toUpperCase();
   const links = NAV.map(({ to, label, icon: Icon, end }) => (
     <NavLink key={to} to={to} end={end} className="nav-link">
@@ -20,7 +23,7 @@ export function AppShell() {
     </NavLink>
   ));
   return (
-    <div className="shell">
+    <div className={item ? 'shell has-player' : 'shell'}>
       <a className="skip-link" href="#main">Skip to content</a>
       <nav className="sidebar" aria-label="Main">
         <HomeLink />
@@ -42,6 +45,7 @@ export function AppShell() {
           <Outlet />
         </main>
       </div>
+      <PlayerBar />
       <nav className="tabbar" aria-label="Main">{links}</nav>
     </div>
   );

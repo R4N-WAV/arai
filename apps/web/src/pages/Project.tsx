@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router';
 import { Cover } from '../components/Cover';
 import { Field } from '../components/Field';
 import { ProjectForm } from '../components/ProjectForm';
+import { TracksSection } from '../components/TracksSection';
 import { Notice } from '../components/Unavailable';
 import { errorMessage } from '../lib/api';
 import { useProjects } from '../lib/projects';
@@ -142,11 +143,7 @@ export function ProjectPage() {
         </section>
       )}
 
-      <section className="section" aria-labelledby="tracks-h">
-        <h2 id="tracks-h">Tracks</h2>
-        <p className="voice" style={{ fontSize: 'var(--fs-lg)' }}>No tracks yet.</p>
-        <p className="muted" style={{ fontSize: 'var(--fs-sm)' }}>Uploading audio needs file storage, which is being switched on next.</p>
-      </section>
+      <TracksSection project={p} />
     </>
   );
 }

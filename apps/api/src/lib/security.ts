@@ -7,7 +7,7 @@ export const CSP = [
   "style-src 'self'",
   "img-src 'self' blob: data:",
   "media-src 'self' blob:",
-  "connect-src 'self' https://*.r2.cloudflarestorage.com",
+  "connect-src 'self' blob:",
   "font-src 'self'",
   "frame-src https://challenges.cloudflare.com",
   "worker-src 'self'",
@@ -31,7 +31,7 @@ export const securityHeaders: MiddlewareHandler<AppBindings> = async (c, next) =
   if (new URL(c.req.url).protocol === 'https:') {
     h.set('Strict-Transport-Security', 'max-age=63072000; includeSubDomains; preload');
   }
-  if (c.req.path.startsWith('/api/')) h.set('Cache-Control', 'no-store');
+  if (c.req.path.startsWith('/api/') && !h.has('Cache-Control')) h.set('Cache-Control', 'no-store');
 };
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);

@@ -1,5 +1,8 @@
 export interface Env {
   DB: D1Database;
+  FILES: DurableObjectNamespace<import('./filestore.js').FileStore>;
+  USER_QUOTA_BYTES: string;
+  PLATFORM_QUOTA_BYTES: string;
   /** Provider-gated features. "on" only once a real provider is configured. */
   FEATURE_EMAIL: 'on' | 'off';
   FEATURE_SMS: 'on' | 'off';

@@ -1,6 +1,6 @@
 # Project Status — authoritative checklist
 
-Last updated: 2026-11-01 (session 2). Tests: 65 passing (crypto 17, shared 4, api 44) + browser E2E: `auth-flow.mjs` (12 steps), `projects-flow.mjs` (8 steps). `[x]` done & tested · `[~]` in progress · `[ ]` not started · `[!]` blocked.
+Last updated: 2026-11-01 (session 5). Tests: 76 passing (crypto 17, shared 4, api 55) + browser E2E: `auth-flow.mjs` (12), `projects-flow.mjs` (8), `tracks-flow.mjs` (12). `[x]` done & tested · `[~]` in progress · `[ ]` not started · `[!]` blocked.
 
 ## Phase 0 — Research & architecture
 - [x] Repository inspected (empty, greenfield)
@@ -38,12 +38,14 @@ Last updated: 2026-11-01 (session 2). Tests: 65 passing (crypto 17, shared 4, ap
 - [x] Projects: create / list / view / edit / public↔private / delete — metadata encrypted per project key, signed self-grant, `requireProjectRole` authz, migration 0002 (11 API tests incl. cross-user, roles, revocation; E2E incl. no-plaintext check)
 - [x] Project colour drives the ambient background (focus mode on the project page)
 - [ ] Folders, ordering (+ keyboard alternative), favourites, recents
-- [ ] Chunked encrypted upload via presigned R2 (progress/cancel/retry, magic-byte sniff)
-- [ ] Metadata extraction, waveform peaks, artwork
-- [ ] Service Worker decrypting stream + player (queue, seek, volume, loop)
-- [ ] Version history (append-only, restore, compare)
-- [ ] Search (client-side for private)
-- [!] Uploads, artwork, player, versions — blocked until the owner enables R2 (see HANDOFF)
+- [x] Encrypted chunked uploads to free-plan Durable Object storage (ADR-011): multi-file, drag-and-drop + picker, progress, cancel, resume/retry, magic-byte sniffing, quotas (migration 0003; 11 API tests)
+- [x] Duration/sample rate/channels + waveform peaks extracted client-side (encrypted in version metadata)
+- [x] Player: queue, play/pause, prev/next, scrubbable waveform (pointer + keyboard slider), volume, repeat, speed (pitch preserved); byte-exact lossless decrypt (E2E)
+- [x] Version history: append-only (DB trigger), upload new version, play any version, make current
+- [~] AIFF uploads keep the original but only play where the browser decodes AIFF (Safari); in-browser AIFF→WAV rewrap TODO
+- [ ] Artwork upload (and cover colour from artwork), track rename UI, reorder tracks (+ keyboard alternative)
+- [ ] Service-Worker range streaming (start playback before full download), gapless
+- [ ] Version comparison (A/B), search (client-side)
 
 ## Phase 3 — Privacy & collaboration
 - [ ] Project key envelopes, member key grants, pending grants

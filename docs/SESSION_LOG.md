@@ -26,3 +26,10 @@
 - Phase 2 start (no R2 yet): encrypted projects end to end. Migration 0002 (projects, project_members, project_keys); `@arai/crypto` signed key grants (3 tests); `@arai/shared` project schemas (b64 moved to `encoding.ts` to avoid an import cycle); `routes/projects.ts` with `requireProjectRole`; 11 API tests; web: ProjectsProvider (decrypt/verify), Library grid with typographic colour covers + filters, New project form (colour swatches, visibility with warning), Project page (edit, public/private confirm, typed-name delete). Ambient background now follows real project colours.
 - E2E `projects-flow.mjs` verifies the private name/description never appear in any request body.
 - Next: owner enables R2 → uploads, player, versions.
+
+## Session 5 — 2026-11-01
+- Owner declined R2 (no automatic card charges). ADR-011: audio stored encrypted in a free-plan SQLite Durable Object (`FileStore`, per project) with quotas (500 MB/user, 4.5 GB platform, 250 MB/file).
+- Built: migration 0003 (files, tracks, append-only track_versions); file register → chunk PUT (exact sizes) → complete; chunk GET (listener+, immutable private cache); tracks/versions API; storage purge on track/project delete; 11 API tests (55 total).
+- Web: `lib/audio.ts` (magic-byte sniff, Web Audio analysis), `lib/tracks.ts` (UploadJob with resume/retry, decrypt-to-blob playback), `lib/player.tsx` + PlayerBar + scrubbable Waveform, TracksSection (drop zone, uploads, track list, versions, delete).
+- E2E `tracks-flow.mjs`: ciphertext-only chunks, byte-identical decrypt, keyboard seek, speed, versions, fake-file rejection, mobile fit. CSP `connect-src` gained `blob:`.
+- Fixed during testing: waveform overflow in the player; player now clears when its track is deleted.

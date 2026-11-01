@@ -31,6 +31,11 @@ export interface Project {
 }
 
 const keyCache = new Map<string, Uint8Array>();
+
+/** The decrypted key for a project's current key version (only after it was opened). */
+export function projectKey(p: { id: string; keyVersion: number }): Uint8Array | null {
+  return keyCache.get(`${p.id}:${p.keyVersion}`) ?? null;
+}
 const metaContext = (id: string) => `project/${id}/meta`;
 
 export function newProjectId(): string {

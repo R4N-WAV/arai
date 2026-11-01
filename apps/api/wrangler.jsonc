@@ -22,10 +22,18 @@
       "migrations_dir": "migrations"
     }
   ],
+  // Encrypted audio chunks (free-plan SQLite Durable Objects: no R2, no card).
+  "durable_objects": {
+    "bindings": [{ "name": "FILES", "class_name": "FileStore" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["FileStore"] }],
   "vars": {
     "FEATURE_EMAIL": "off",
     "FEATURE_SMS": "off",
-    "REQUIRE_TURNSTILE": "false"
+    "REQUIRE_TURNSTILE": "false",
+    // Storage limits keep Arai inside Cloudflare's free 5 GB.
+    "USER_QUOTA_BYTES": "524288000",
+    "PLATFORM_QUOTA_BYTES": "4500000000"
   }
   // Secrets (wrangler secret put / .dev.vars, never committed):
   // AUTH_PEPPER, KDF_SALT_SECRET, IP_HMAC_SECRET, optional TURNSTILE_SECRET

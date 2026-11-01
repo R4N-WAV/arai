@@ -17,12 +17,13 @@
 - Tests: `npm test` (crypto + Workers-runtime API). Browser E2E: build web, `wrangler dev` (run in background), `NODE_PATH=$(npm root -g) node apps/web/e2e/auth-flow.mjs`.
 
 ## Next concrete tasks
-1. **R2 (owner action first)**: Cloudflare dashboard → R2 → enable (needs a payment method on file; free tier 10 GB) → create bucket `arai-files` → *Manage R2 API tokens* → create token with Object Read & Write on that bucket → save Access Key ID / Secret as GitHub secrets `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` (deploy job must push them with `wrangler secret put`). Then add the R2 binding to wrangler.jsonc and bucket CORS for the workers.dev origin (PUT/GET, headers content-type, range).
-2. **Uploads**: migration 0003 (folders, tracks, track_versions, files per ARCHITECTURE §5); presigned multipart PUT via aws4fetch; client: magic-byte sniff → metadata (`music-metadata`) → waveform peaks → chunked XChaCha20 encryption (`@arai/crypto` chunks.ts, file key wrapped by project key) → upload with progress/cancel/retry; quota per user.
-3. **Player**: Service Worker that decrypts byte ranges for `<audio>`; queue, seek, volume, loop; waveform scrubbing; version history.
-4. Phase 1 leftovers: password/username change, ESLint, axe in E2E, lazy-load crypto.
+1. **Artwork**: upload an image per project (re-encode via canvas to strip metadata, encrypt like audio, small size cap); derive the cover colour from it (average/dominant colour → `meta.color`); show it in sleeves, project hero and player.
+2. **Track polish**: rename (inline), reorder (drag + "Move up/down" buttons), AIFF→WAV rewrap for Chromium playback, A/B version comparison.
+3. **Streaming**: Service Worker that maps `<audio>` byte ranges to encrypted chunks so long files start instantly; keep the blob fallback.
+4. **Phase 3**: collaborators — invite by username, wrap the project key to their X25519 key (createGrant), roles UI, revoke + key rotation (re-wrap file keys), time-coded comments per version.
+5. Phase 1 leftovers: password/username change, ESLint, axe in E2E, lazy-load crypto.
 
-Local E2E note: registration is rate-limited (5/hour per network). Before re-running E2E locally many times, clear counters: `npx wrangler d1 execute arai --local --command "DELETE FROM rate_limits"` (in `apps/api`).
+Local E2E: three scripts in `apps/web/e2e/` (auth, projects, tracks). Registration is rate-limited (5/hour per network). Before re-running E2E locally many times, clear counters: `npx wrangler d1 execute arai --local --command "DELETE FROM rate_limits"` (in `apps/api`).
 
 ## Owner actions still required (not blocking local development)
 Deployment setup (README "Deployment": D1 database id, API token, account id into GitHub). Later: R2 enablement (Phase 2), Turnstile keys, domain + email provider, SMS provider. See `docs/REMAINING_TO_V1.md §2`.
