@@ -20,6 +20,7 @@ import {
 import { MAX_FILE_BYTES, type TrackDto, type TrackVersionDto } from '@arai/shared';
 import { api, ApiError } from './api';
 import { analyse, sniff, type AudioFormat } from './audio';
+import { aiffToWav, browserPlaysAiff } from './aiff';
 import { keyFor, newProjectId as newId, projectKey, type Project } from './projects';
 
 export interface VersionMeta {
@@ -337,7 +338,12 @@ export async function audioUrl(project: Project, v: TrackVersion, onProgress?: (
     }
   };
   await Promise.all(Array.from({ length: Math.min(4, n) }, worker));
-  const url = URL.createObjectURL(new Blob(parts as BlobPart[], { type: v.meta?.mime ?? 'application/octet-stream' }));
+  // AIFF plays natively only in Safari; elsewhere play a WAV rewrite (original untouched).
+  const blob =
+    v.meta?.format === 'aiff' && !browserPlaysAiff()
+      ? new Blob([aiffToWav(new Uint8Array(await new Blob(parts as BlobPart[]).arrayBuffer())) as BlobPart], { type: 'audio/wav' })
+      : new Blob(parts as BlobPart[], { type: v.meta?.mime ?? 'application/octet-stream' });
+  const url = URL.createObjectURL(blob);
   urlCache.set(v.id, url);
   // Keep memory bounded: only the few most recent decrypted tracks stay in memory.
   if (urlCache.size > 4) {

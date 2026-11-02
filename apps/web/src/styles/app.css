@@ -749,3 +749,11 @@ select option:checked { background-color: #2a2830; color: var(--text); }
 .recent-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .folder-edit { border: 0; border-top: 1px solid var(--line); padding: var(--s-4) 0; margin: 0; }
 .folder-projects { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 0 var(--s-4); margin-top: var(--s-2); }
+/* A/B compare */
+.compare { display: grid; gap: var(--s-4); }
+.compare-pick { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-4); }
+.compare-pick .field { margin: 0; }
+.compare-controls { display: flex; align-items: center; gap: var(--s-4); flex-wrap: wrap; }
+.ab-switch { display: inline-flex; border: 1px solid var(--line-strong); border-radius: 999px; padding: 3px; }
+.ab-side { min-width: 52px; min-height: 40px; border: 0; border-radius: 999px; background: transparent; color: var(--muted); font: 600 var(--fs-md, 1rem) var(--font-mono); cursor: pointer; }
+.ab-side.on { background: var(--text); color: var(--void); }

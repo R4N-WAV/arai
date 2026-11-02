@@ -6,6 +6,7 @@
 import { decryptChunk, fromBase64Url } from '@arai/crypto';
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Link, useParams } from 'react-router';
+import { aiffToWav, browserPlaysAiff } from '../lib/aiff';
 import { useAmbient } from '../components/Ambient';
 import { CommentThread, type CommentsApi } from '../components/Comments';
 import { Cover } from '../components/Cover';
@@ -61,8 +62,12 @@ function SharedPlayer({ s }: { s: OpenedShare }) {
     setDuration((t.meta as VersionMeta | null)?.duration ?? 0);
     try {
       const key = await fromBase64Url(t.fileKey);
-      let url = await streamFor({ fileId: t.file.id, key, count: t.file.chunkCount, encSize: t.file.encSize, mime: (t.meta as VersionMeta | null)?.mime ?? 'application/octet-stream', base: `/api/share/${s.linkId}/files/`, shareToken: s.token });
-      if (!url) url = URL.createObjectURL(await decryptAll(s, t));
+      const aiff = (t.meta as VersionMeta | null)?.format === 'aiff' && !browserPlaysAiff();
+      let url = aiff ? null : await streamFor({ fileId: t.file.id, key, count: t.file.chunkCount, encSize: t.file.encSize, mime: (t.meta as VersionMeta | null)?.mime ?? 'application/octet-stream', base: `/api/share/${s.linkId}/files/`, shareToken: s.token });
+      if (!url) {
+        const blob = await decryptAll(s, t);
+        url = URL.createObjectURL(aiff ? new Blob([aiffToWav(new Uint8Array(await blob.arrayBuffer())) as BlobPart], { type: 'audio/wav' }) : blob);
+      }
       el.src = url;
       if (startAt > 0) el.addEventListener('loadedmetadata', () => (el.currentTime = startAt), { once: true });
       await el.play();

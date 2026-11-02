@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { Project } from './projects';
 import { prefetch, streamUrl } from './stream';
+import { browserPlaysAiff } from './aiff';
 import { audioUrl, decodeWave, type Track, type TrackVersion, type WaveData } from './tracks';
 
 export interface QueueItem {
@@ -78,7 +79,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     setWave(await decodeWave(it.version.meta));
     try {
       // Stream (starts after the first chunk); fall back to full decrypt.
-      let url = await streamUrl(it.project, it.version).catch(() => null);
+      // AIFF outside Safari is converted in memory, so it skips the streaming path.
+      let url = it.version.meta?.format === 'aiff' && !browserPlaysAiff() ? null : await streamUrl(it.project, it.version).catch(() => null);
       if (token !== loadToken.current) return;
       const startAt = it.startAt ?? it.track.trims?.[it.version.id]?.start ?? 0;
       const applyStart = () => {

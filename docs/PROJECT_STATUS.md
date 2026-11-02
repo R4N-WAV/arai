@@ -42,7 +42,7 @@ Last updated: 2026-11-02 (session 12). Tests: 106 passing (crypto 20, shared 4, 
 - [x] Duration/sample rate/channels + waveform peaks extracted client-side (encrypted in version metadata)
 - [x] Player: queue, play/pause, prev/next, scrubbable waveform (pointer + keyboard slider), volume, repeat, speed (pitch preserved); byte-exact lossless decrypt (E2E)
 - [x] Version history: append-only (DB trigger), upload new version, play any version, make current
-- [~] AIFF uploads keep the original but only play where the browser decodes AIFF (Safari); in-browser AIFF→WAV rewrap TODO
+- [x] AIFF uploads keep the original; other browsers play an in-browser WAV rewrite (Phase 11)
 - [ ] Artwork upload (cropper ready; needs encrypted image files), track rename UI
 - [x] Service-Worker range streaming: playback starts after the first decrypted chunk (~1.4 s locally incl. key setup); next track pre-warmed; blob fallback (`src/sw.ts`, `lib/stream.ts`)
 - [x] Detailed canvas waveforms (1600 buckets, peak + RMS); loudness (BS.1770 LUFS), sample peak, bit depth in version insights
@@ -55,7 +55,7 @@ Last updated: 2026-11-02 (session 12). Tests: 106 passing (crypto 20, shared 4, 
 - [x] Mobile: cover-first project hero, single-row icon actions, calm rows, menus as bottom sheets; avatar picture in shell; smooth pointer-following drag with edge auto-scroll
 - [x] Installable app: web manifest (standalone), iOS home-screen meta, app icons from the அ mark (`scripts/build-icons.mjs`), safe-area padding; Back button on all non-tab pages (mobile bar + desktop)
 - [x] Home-screen app polish: solid top bar (no backdrop blur smearing content at the status bar), native rubber-band scrolling restored, lightweight ambient on phones (CSS gradients, static grain tile, no live SVG filters) for smooth 60 fps scrolling
-- [ ] Version comparison (A/B), search (client-side) — gapless tracked in Phase 6
+- [x] Version comparison (A/B) and search (Phases 10–11)
 - [x] Library import from Samply / Untitled downloads (ADR-012): folder, ZIP or files; projects per folder, versions grouped by name markers, colour from cover art; review/rename before import; quota-aware; runs through the encrypted upload pipeline (unit tests + E2E)
 - [x] Layout centred on wide screens (content column, auth, empty states)
 
@@ -105,7 +105,7 @@ The owner asked to continue to phase 14. These phases take the remaining backlog
 - [x] Search (client-side over decrypted names, tags, descriptions and track titles; plays results) · [x] pins · [x] recently played · [x] sort · [x] folders — all in one encrypted per-account preferences blob (migration 0010, key derived from the account key); API test + library E2E
 
 ### Phase 11 — Version tools
-- [ ] A/B compare two versions (same position, loudness-matched, instant switch) · [ ] AIFF → WAV in the browser for playback everywhere
+- [x] A/B compare (both versions in sync through Web Audio, instant switch with A/B keys, loudness-matched via BS.1770) · [x] AIFF/AIFC → WAV in the browser for analysis and playback outside Safari (unit tests + versions E2E)
 
 ### Phase 12 — Playback engine
 - [ ] Gapless playback between tracks · [ ] independent pitch shift (semitones, speed unchanged)

@@ -11,6 +11,7 @@ import { Modal } from './Modal';
 import { Notice } from './Unavailable';
 import { VersionComments } from './Comments';
 import { TrimDialog } from './TrimDialog';
+import { CompareDialog } from './CompareDialog';
 import { isOffline, keepOffline, offlineSupported, removeOffline } from '../lib/offline';
 import { syncShares } from '../lib/collab';
 
@@ -71,6 +72,7 @@ function TrackRow(props: {
   const wave = useWave(t.current);
   const [confirm, setConfirm] = useState(false);
   const [trimming, setTrimming] = useState<TrackVersion | null>(null);
+  const [comparing, setComparing] = useState(false);
   const [offline, setOffline] = useState(() => (t.current ? isOffline(t.current.file.id) : false));
   const [saving, setSaving] = useState<number | null>(null);
   const active = player.item?.track.id === t.id;
@@ -129,7 +131,6 @@ function TrackRow(props: {
             v{t.current?.number ?? '–'} · {t.current?.meta ? t.current.meta.format.toUpperCase() : '—'}
             {t.current && t.trims[t.current.id] && ' · trimmed'}
             {saving !== null ? ` · saving offline ${Math.round(saving * 100)}%` : offline && ' · offline'}
-            {t.current?.meta?.format === 'aiff' && ' · plays in Safari for now'}
           </span>
         </div>
         <button type="button" className="version-badge" aria-expanded={open} aria-label={`Version ${t.current?.number ?? ''} of ${t.versions.length}. Show versions of ${t.title}`} onClick={props.onToggle}>
@@ -143,6 +144,7 @@ function TrackRow(props: {
             { label: open ? 'Hide versions' : 'Versions and insights', onSelect: props.onToggle },
             ...(canEdit ? [{ label: 'Upload new version', onSelect: props.onNewVersion }] : []),
             ...(canEdit && t.current?.meta?.duration ? [{ label: 'Trim…', onSelect: () => setTrimming(t.current) }] : []),
+            ...(t.versions.length > 1 ? [{ label: 'Compare versions…', onSelect: () => setComparing(true) }] : []),
             ...(t.current ? [{ label: 'Download original', onSelect: () => void downloadOriginal(props.project, t.current!) }] : []),
             ...(offlineSupported() && t.current ? [{ label: offline ? 'Remove offline copy' : 'Keep offline', onSelect: () => void toggleOffline() }] : []),
             ...(canAdmin ? [{ label: 'Delete track…', onSelect: () => { if (!open) props.onToggle(); setConfirm(true); }, danger: true }] : []),
@@ -200,6 +202,7 @@ function TrackRow(props: {
             </ul>
             <div className="form-actions" style={{ marginTop: 'var(--s-4)' }}>
               {canEdit && <button type="button" className="btn btn-sm" onClick={props.onNewVersion}>Upload new version</button>}
+              {t.versions.length > 1 && <button type="button" className="btn btn-sm" onClick={() => setComparing(true)}>Compare A/B</button>}
 
               {canAdmin && confirm && (
                 <>
@@ -212,6 +215,7 @@ function TrackRow(props: {
           </div>
         )}
       </div>
+      {comparing && <CompareDialog project={props.project} track={t} open onClose={() => setComparing(false)} />}
       {trimming && <TrimDialog project={props.project} track={t} version={trimming} open onClose={() => setTrimming(null)} onSaved={props.onChanged} />}
     </li>
   );

@@ -1,3 +1,4 @@
+import { aiffToWav, browserPlaysAiff } from './aiff';
 /**
  * Client-side audio inspection. The server only ever sees ciphertext, so
  * format checks happen here, on the real bytes (never the file extension).
@@ -126,7 +127,10 @@ export async function analyse(file: Blob, format?: AudioFormat['format']): Promi
   if (file.size > MAX_DECODE_BYTES) return empty;
   try {
     const ctx = new OfflineAudioContext(1, 1, 44100);
-    const buf = await ctx.decodeAudioData(await file.arrayBuffer());
+    let bytes = await file.arrayBuffer();
+    // Chromium/Firefox cannot decode AIFF: analyse a WAV rewrite instead.
+    if (format === 'aiff' && !browserPlaysAiff()) bytes = aiffToWav(new Uint8Array(bytes)).buffer as ArrayBuffer;
+    const buf = await ctx.decodeAudioData(bytes);
     const chans = Array.from({ length: buf.numberOfChannels }, (_, i) => buf.getChannelData(i));
     const per = buf.length / PEAK_BUCKETS;
     const rawPeak = new Float32Array(PEAK_BUCKETS);
