@@ -374,6 +374,10 @@ messages.post('/conversations/:id/messages', async (c) => {
   const row = await c.env.DB.prepare(`${MSG} WHERE id = ?`).bind(body.id).first<MsgRow>();
   const message = (await messageDtos(c.env.DB, [row!]))[0]!;
   c.executionCtx.waitUntil(audience(c.env.DB, a).then((ids) => push(c.env, ids, { type: 'message', conversationId: a.id, message })));
+  // Phone notifications: at most one per conversation per minute for each person.
+  for (const uid of (await audience(c.env.DB, a)).filter((u) => u !== me)) {
+    if (await rateLimit(c.env.DB, `push-msg:${uid}:${a.id}`, 1, 60_000)) c.var.wake?.push(uid);
+  }
   return c.json({ message }, 201);
 });
 

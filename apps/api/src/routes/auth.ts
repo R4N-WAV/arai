@@ -22,6 +22,7 @@ export function capabilities(env: Env): Capabilities {
     emailDelivery: env.FEATURE_EMAIL === 'on',
     sms: env.FEATURE_SMS === 'on',
     gifs: env.FEATURE_GIFS === 'on' && !!env.GIF_API_KEY,
+    push: !!env.VAPID_PRIVATE_JWK,
     turnstileSiteKey: env.TURNSTILE_SITE_KEY ?? null,
   };
 }
@@ -402,6 +403,7 @@ authed.post('/account/delete', async (c) => {
     db.prepare('DELETE FROM profile_images WHERE user_id = ?').bind(id),
     db.prepare('DELETE FROM profiles WHERE user_id = ?').bind(id),
     db.prepare('DELETE FROM account_prefs WHERE user_id = ?').bind(id),
+    db.prepare('DELETE FROM push_subscriptions WHERE user_id = ?').bind(id),
     db.prepare("DELETE FROM search_index WHERE kind = 'user' AND ref = ?").bind(id),
     db.prepare('UPDATE user_keys SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL').bind(now, id),
     db.prepare('UPDATE sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL').bind(now, id),

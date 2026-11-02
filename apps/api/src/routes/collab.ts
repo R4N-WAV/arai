@@ -126,7 +126,7 @@ collab.post('/projects/:id/members', async (c) => {
     ),
   ]);
   await appendAudit(c.env.DB, { actorId: me, action: 'project.invite', target: id, details: { userId: body.userId, role: body.role } });
-  await notify(c.env.DB, body.userId, 'invite', me, id);
+  await notify(c.env.DB, body.userId, 'invite', me, id, c.var.wake);
   return c.json({ ok: true }, 201);
 });
 
@@ -305,14 +305,14 @@ collab.post('/versions/:versionId/comments', async (c) => {
     if (String(e).includes('UNIQUE') || String(e).includes('PRIMARY')) return c.json({ error: 'id_taken' }, 409);
     throw e;
   }
-  await notifyProject(c.env.DB, projectId, me, 'comment');
+  await notifyProject(c.env.DB, projectId, me, 'comment', c.var.wake);
   const row = await c.env.DB.prepare(`${COMMENTS} WHERE c.id = ?`).bind(body.id).first<CommentRow>();
   return c.json({ comment: commentDto(row!) }, 201);
 });
 
-async function notifyProject(db: D1Database, projectId: string, actor: string, kind: 'comment') {
+async function notifyProject(db: D1Database, projectId: string, actor: string, kind: 'comment', wake?: string[]) {
   const { results } = await db.prepare('SELECT user_id FROM project_members WHERE project_id = ? AND revoked_at IS NULL AND accepted_at IS NOT NULL AND user_id != ? LIMIT 50').bind(projectId, actor).all<{ user_id: string }>();
-  for (const r of results) await notify(db, r.user_id, kind, actor, projectId);
+  for (const r of results) await notify(db, r.user_id, kind, actor, projectId, wake);
 }
 
 collab.patch('/comments/:id', async (c) => {

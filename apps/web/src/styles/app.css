@@ -757,3 +757,4 @@ select option:checked { background-color: #2a2830; color: var(--text); }
 .ab-switch { display: inline-flex; border: 1px solid var(--line-strong); border-radius: 999px; padding: 3px; }
 .ab-side { min-width: 52px; min-height: 40px; border: 0; border-radius: 999px; background: transparent; color: var(--muted); font: 600 var(--fs-md, 1rem) var(--font-mono); cursor: pointer; }
 .ab-side.on { background: var(--text); color: var(--void); }
+.update-banner { position: fixed; left: 50%; top: max(var(--s-3), env(safe-area-inset-top)); transform: translateX(-50%); z-index: 50; display: flex; gap: var(--s-3); align-items: center; padding: var(--s-2) var(--s-2) var(--s-2) var(--s-4); border-radius: 999px; background: #17161b; border: 1px solid var(--line-strong); color: var(--text); font-size: var(--fs-sm); box-shadow: 0 12px 30px -12px rgb(0 0 0 / 0.8); }

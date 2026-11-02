@@ -134,3 +134,77 @@ async function stream(req: Request, token: string): Promise<Response> {
     },
   });
 }
+
+// ---- Web Push (phase 13) ------------------------------------------------------
+// Pushes arrive empty. The worker asks Arai (with this device's session) what
+// happened and shows names and counts only; private content never leaves the
+// encrypted channel, not even to the push service.
+interface Summary {
+  latest: { kind: string; target_id: string | null; actor: string | null } | null;
+  unread: number;
+  message: { conversation_id: string; sender: string; n: number } | null;
+  unreadMessages: number;
+}
+
+function describe(s: Summary): { title: string; body: string; url: string; tag: string } | null {
+  if (s.message) {
+    const more = s.message.n > 1 ? ` (${s.message.n} new)` : '';
+    return { title: `@${s.message.sender}`, body: `New message${more}`, url: `/messages/${s.message.conversation_id}`, tag: `msg-${s.message.conversation_id}` };
+  }
+  const l = s.latest;
+  if (!l) return null;
+  const who = l.actor ? `@${l.actor}` : 'Someone';
+  const text: Record<string, [string, string]> = {
+    invite: [`${who} invited you to a project`, '/'],
+    comment: [`${who} commented in a project`, l.target_id ? `/projects/${l.target_id}` : '/activity'],
+    follow: [`${who} followed you`, '/activity'],
+    friend_request: [`${who} wants to be friends`, '/activity'],
+    friend_accept: [`${who} accepted your friend request`, '/activity'],
+    moderation: ['A moderator reviewed something of yours', '/activity'],
+  };
+  const [body, url] = text[l.kind] ?? ['Something new in Arai', '/activity'];
+  return { title: 'Arai', body, url, tag: `n-${l.kind}` };
+}
+
+self.addEventListener('push', (e: PushEvent) => {
+  e.waitUntil(
+    (async () => {
+      let s: Summary | null = null;
+      try {
+        const res = await fetch('/api/push/summary', { credentials: 'same-origin' });
+        if (res.ok) s = (await res.json()) as Summary;
+      } catch {
+        /* offline: fall through to a generic notice */
+      }
+      const n = s ? describe(s) : null;
+      const badge = s ? s.unread + s.unreadMessages : 0;
+      const nav = self.navigator as Navigator & { setAppBadge?: (n: number) => Promise<void> };
+      if (nav.setAppBadge) await nav.setAppBadge(badge).catch(() => undefined);
+      // Browsers require a visible notification for every push.
+      await self.registration.showNotification(n?.title ?? 'Arai', {
+        body: n?.body ?? 'Something new in Arai',
+        tag: n?.tag ?? 'arai',
+        icon: '/icons/icon-192.png',
+        badge: '/icons/icon-192.png',
+        data: { url: n?.url ?? '/' },
+      });
+    })(),
+  );
+});
+
+self.addEventListener('notificationclick', (e: NotificationEvent) => {
+  e.notification.close();
+  const url = new URL((e.notification.data as { url?: string })?.url ?? '/', self.location.origin).href;
+  e.waitUntil(
+    (async () => {
+      const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+      const open = wins.find((w) => new URL(w.url).origin === self.location.origin) as WindowClient | undefined;
+      if (open) {
+        await open.focus();
+        await open.navigate(url).catch(() => undefined);
+      } else {
+        await self.clients.openWindow(url);
+      }
+    })(),
+  );
+});

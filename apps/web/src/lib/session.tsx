@@ -19,7 +19,7 @@ interface SessionState {
   signOut: () => Promise<void>;
 }
 
-const DEFAULT_CAPS: Capabilities = { emailDelivery: false, sms: false, gifs: false, turnstileSiteKey: null };
+const DEFAULT_CAPS: Capabilities = { emailDelivery: false, sms: false, gifs: false, push: false, turnstileSiteKey: null };
 const Ctx = createContext<SessionState | null>(null);
 
 export function SessionProvider({ children }: { children: ReactNode }) {

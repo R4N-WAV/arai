@@ -89,3 +89,10 @@ jobs:
               echo "$name created"
             fi
           done
+          # Web Push (VAPID) signing key: a P-256 private key as JWK. Never printed.
+          if grep -q '"VAPID_PRIVATE_JWK"' <<<"$existing"; then
+            echo "VAPID_PRIVATE_JWK already set"
+          else
+            node -e "process.stdout.write(JSON.stringify(require('crypto').generateKeyPairSync('ec',{namedCurve:'P-256'}).privateKey.export({format:'jwk'})))" | npx wrangler secret put VAPID_PRIVATE_JWK
+            echo "VAPID_PRIVATE_JWK created"
+          fi

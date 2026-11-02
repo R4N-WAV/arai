@@ -2,7 +2,7 @@
  * Social: follows, friends, blocks, reports, notifications and discovery.
  * Only public profiles and public projects are ever searchable.
  */
-import { reportRequest, type NotificationDto, type PersonDto } from '@arai/shared';
+import { pushSubscriptionRequest, reportRequest, type NotificationDto, type PersonDto } from '@arai/shared';
 import { Hono, type Context } from 'hono';
 import type { AppBindings } from '../env.js';
 import { ipHmac, requireSecret } from '../lib/crypto.js';
@@ -10,6 +10,7 @@ import { randomId as newId } from '../lib/ids.js';
 import { rateLimit } from '../lib/ratelimit.js';
 import { clientIp, requireUser, type AuthedBindings } from '../lib/session.js';
 import { parseBody } from '../lib/validate.js';
+import { validEndpoint, vapid } from '../lib/push.js';
 
 const social = new Hono<AuthedBindings>();
 for (const p of ['/social/*', '/notifications', '/notifications/*', '/reports']) social.use(p, requireUser);
@@ -19,8 +20,9 @@ const notFound = (c: Context) => c.json({ error: 'not_found' }, 404);
 
 // ---- helpers used across routes ----------------------------------------------------
 
-export async function notify(db: D1Database, userId: string, kind: NotificationDto['kind'], actorId: string | null, targetId: string | null): Promise<void> {
+export async function notify(db: D1Database, userId: string, kind: NotificationDto['kind'], actorId: string | null, targetId: string | null, wake?: string[]): Promise<void> {
   if (actorId && (await isBlocked(db, userId, actorId))) return;
+  wake?.push(userId);
   // Collapse repeats (e.g. many comments) into one unread notification.
   const dup = await db
     .prepare('SELECT id FROM notifications WHERE user_id = ? AND kind = ? AND actor_id IS ? AND target_id IS ? AND read_at IS NULL')
@@ -103,7 +105,7 @@ social.post('/social/:username/follow', async (c) => {
   if (!other || other.id === me || (await isBlocked(c.env.DB, me, other.id))) return notFound(c);
   if (!(await rateLimit(c.env.DB, `follow:${me}`, 200, 3600_000))) return c.json({ error: 'too_many_attempts' }, 429);
   const res = await c.env.DB.prepare('INSERT OR IGNORE INTO follows (follower_id, followee_id, created_at) VALUES (?, ?, ?)').bind(me, other.id, Date.now()).run();
-  if (res.meta.changes) await notify(c.env.DB, other.id, 'follow', me, null);
+  if (res.meta.changes) await notify(c.env.DB, other.id, 'follow', me, null, c.var.wake);
   return c.json({ ok: true });
 });
 
@@ -125,12 +127,12 @@ social.post('/social/:username/friend', async (c) => {
   if (row?.status === 'accepted') return c.json({ friend: 'friends' });
   if (row && row.requested_by !== me) {
     await c.env.DB.prepare("UPDATE friendships SET status = 'accepted', accepted_at = ? WHERE user_a = ? AND user_b = ?").bind(Date.now(), x, y).run();
-    await notify(c.env.DB, other.id, 'friend_accept', me, null);
+    await notify(c.env.DB, other.id, 'friend_accept', me, null, c.var.wake);
     return c.json({ friend: 'friends' });
   }
   if (!row) {
     await c.env.DB.prepare("INSERT INTO friendships (user_a, user_b, requested_by, status, created_at) VALUES (?, ?, ?, 'pending', ?)").bind(x, y, me, Date.now()).run();
-    await notify(c.env.DB, other.id, 'friend_request', me, null);
+    await notify(c.env.DB, other.id, 'friend_request', me, null, c.var.wake);
   }
   return c.json({ friend: 'requested' });
 });
@@ -280,6 +282,62 @@ social.post('/reports', async (c) => {
     .bind(newId(), me, body.targetType, targetId, body.reason, body.details, body.evidence ?? null, Date.now())
     .run();
   return c.json({ ok: true }, 201);
+});
+
+// ---- Web Push (phase 13) ---------------------------------------------------------
+social.use('/push/subscriptions', requireUser);
+social.use('/push/summary', requireUser);
+
+social.get('/push/key', async (c) => {
+  const v = await vapid(c.env);
+  return v ? c.json({ key: v.publicKey }) : c.json({ error: 'push_unavailable' }, 404);
+});
+
+social.post('/push/subscriptions', async (c) => {
+  const body = await parseBody(c, pushSubscriptionRequest);
+  if (!body || !validEndpoint(body.endpoint)) return bad(c);
+  const me = c.get('session').user_id;
+  if (!(await rateLimit(c.env.DB, `push-sub:${me}`, 30, 3600_000))) return c.json({ error: 'too_many_attempts' }, 429);
+  const count = await c.env.DB.prepare('SELECT COUNT(*) AS n FROM push_subscriptions WHERE user_id = ?').bind(me).first<{ n: number }>();
+  if ((count?.n ?? 0) >= 10) await c.env.DB.prepare('DELETE FROM push_subscriptions WHERE id = (SELECT id FROM push_subscriptions WHERE user_id = ? ORDER BY created_at LIMIT 1)').bind(me).run();
+  await c.env.DB.prepare('INSERT INTO push_subscriptions (id, user_id, endpoint, created_at) VALUES (?, ?, ?, ?) ON CONFLICT(endpoint) DO UPDATE SET user_id = excluded.user_id, failed_at = NULL')
+    .bind(newId(), me, body.endpoint, Date.now())
+    .run();
+  return c.json({ ok: true }, 201);
+});
+
+social.delete('/push/subscriptions', async (c) => {
+  const body = await parseBody(c, pushSubscriptionRequest);
+  if (!body) return bad(c);
+  await c.env.DB.prepare('DELETE FROM push_subscriptions WHERE endpoint = ? AND user_id = ?').bind(body.endpoint, c.get('session').user_id).run();
+  return c.json({ ok: true });
+});
+
+/** What a woken device shows: names and counts only, never private content. */
+social.get('/push/summary', async (c) => {
+  const me = c.get('session').user_id;
+  const latest = await c.env.DB.prepare(
+    'SELECT n.kind, n.target_id, u.username AS actor FROM notifications n LEFT JOIN users u ON u.id = n.actor_id WHERE n.user_id = ? AND n.read_at IS NULL ORDER BY n.created_at DESC LIMIT 1',
+  )
+    .bind(me)
+    .first<{ kind: string; target_id: string | null; actor: string | null }>();
+  const unread = await c.env.DB.prepare('SELECT COUNT(*) AS n FROM notifications WHERE user_id = ? AND read_at IS NULL').bind(me).first<{ n: number }>();
+  const msgs = await c.env.DB.prepare(
+    `SELECT m.conversation_id, u.username AS sender, COUNT(*) AS n FROM messages m
+       JOIN conversation_members cm ON cm.conversation_id = m.conversation_id AND cm.user_id = ?1 AND cm.status = 'active'
+       JOIN users u ON u.id = m.sender_id
+      WHERE m.sender_id != ?1 AND m.deleted_at IS NULL AND m.created_at > cm.last_read_at
+      GROUP BY m.conversation_id ORDER BY MAX(m.created_at) DESC LIMIT 1`,
+  )
+    .bind(me)
+    .first<{ conversation_id: string; sender: string; n: number }>();
+  const totalMsgs = await c.env.DB.prepare(
+    `SELECT COUNT(*) AS n FROM messages m JOIN conversation_members cm ON cm.conversation_id = m.conversation_id AND cm.user_id = ?1 AND cm.status = 'active'
+      WHERE m.sender_id != ?1 AND m.deleted_at IS NULL AND m.created_at > cm.last_read_at`,
+  )
+    .bind(me)
+    .first<{ n: number }>();
+  return c.json({ latest, unread: unread?.n ?? 0, message: msgs, unreadMessages: totalMsgs?.n ?? 0 });
 });
 
 export default social;

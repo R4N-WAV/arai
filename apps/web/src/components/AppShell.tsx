@@ -1,10 +1,11 @@
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router';
 import { useSession } from '../lib/session';
 import { IconBell, IconDiscover, IconLibrary, IconMessages, IconSettings } from './Icons';
 import { useUnread } from '../lib/activity';
 import { useRealtime } from '../lib/messages';
 import { useLibrary } from '../lib/library';
+import { setBadge } from '../lib/push';
 import { HomeLink } from './Logo';
 import { PlayerBar } from './PlayerBar';
 import { usePlayer } from '../lib/player';
@@ -28,6 +29,19 @@ export function AppShell() {
  * including the home-indicator inset) and exposes their height as
  * `--chrome-bottom`, so page content can always scroll fully clear of them.
  */
+/** True once a new version of the app has taken over this page (service worker update). */
+function useAppUpdated(): boolean {
+  const [updated, setUpdated] = useState(false);
+  useEffect(() => {
+    const sw = navigator.serviceWorker;
+    if (!sw?.controller) return; // first install is not an update
+    const on = () => setUpdated(true);
+    sw.addEventListener('controllerchange', on);
+    return () => sw.removeEventListener('controllerchange', on);
+  }, []);
+  return updated;
+}
+
 function useBottomChrome(active: unknown) {
   useEffect(() => {
     const root = document.documentElement;
@@ -63,6 +77,8 @@ export function AppShellWith({ children }: { children: ReactNode }) {
   useBottomChrome(Boolean(item));
   const unread = useUnread(location.pathname);
   const { unread: unreadMessages } = useRealtime();
+  useEffect(() => setBadge(unread + unreadMessages), [unread, unreadMessages]);
+  const updated = useAppUpdated();
   const bell = (cls: string) => (
     <Link to="/activity" className={cls} aria-label={unread ? `Activity, ${unread} new` : 'Activity'} viewTransition>
       <IconBell />
@@ -137,6 +153,12 @@ export function AppShellWith({ children }: { children: ReactNode }) {
           {children}
         </main>
       </div>
+      {updated && (
+        <div className="update-banner" role="status">
+          Arai was updated.
+          <button type="button" className="btn btn-sm" onClick={() => window.location.reload()}>Reload</button>
+        </div>
+      )}
       <PlayerBar />
       <nav className="tabbar" aria-label="Main">{links}</nav>
     </div>

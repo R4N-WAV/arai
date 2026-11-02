@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
+import { pushTo } from './lib/push.js';
 import type { AppBindings } from './env.js';
 import { randomId } from './lib/ids.js';
 import { originGuard, securityHeaders } from './lib/security.js';
@@ -21,6 +22,13 @@ app.use('*', async (c, next) => {
   await next();
 });
 app.use('*', securityHeaders);
+// Wake phones (Web Push) for whoever a request notified, after responding.
+app.use('/api/*', async (c, next) => {
+  c.set('wake', []);
+  await next();
+  const wake = c.get('wake') ?? [];
+  if (wake.length) c.executionCtx.waitUntil(pushTo(c.env, wake, new URL(c.req.url).origin));
+});
 app.use('/api/*', originGuard);
 const jsonLimit = bodyLimit({ maxSize: 64 * 1024, onError: (c) => c.json({ error: 'payload_too_large' }, 413) });
 const chunkLimit = bodyLimit({ maxSize: 1024 * 1024 + 64, onError: (c) => c.json({ error: 'payload_too_large' }, 413) });

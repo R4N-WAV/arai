@@ -111,7 +111,7 @@ The owner asked to continue to phase 14. These phases take the remaining backlog
 - [x] Gapless handoff: the next track preloads in a second element and takes over within a few tens of ms of the end (measured in E2E; not sample-accurate) · [x] independent pitch shift ±12 semitones via an AudioWorklet (speed unchanged; Web Audio routing starts only once pitch is used)
 
 ### Phase 13 — Notifications & installed app
-- [ ] Web Push (VAPID) for messages, invitations and comments, opt-in per device · [ ] app icon badge · [ ] "new version available" prompt
+- [x] Web Push (VAPID, empty pushes: the device fetches names/counts itself, no content via push services), opt-in per device in Settings; messages (≤1/min per conversation), invitations, comments, follows, friend requests, moderation (migration 0011; 2 API tests; push E2E via CDP) · [x] app icon badge · [x] “Arai was updated · Reload” banner
 
 ### Phase 14 — Help, privacy & onboarding
 - [ ] First-run guide · [ ] keyboard shortcut sheet · [ ] plain-language privacy page (what is encrypted, what the server sees) · [ ] help page

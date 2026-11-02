@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { EMAIL_REASON, Notice, SMS_REASON, Unavailable } from '../components/Unavailable';
 import { api, errorMessage } from '../lib/api';
 import { useSession } from '../lib/session';
+import { currentSubscription, disablePush, enablePush, pushSupported } from '../lib/push';
 import { Field } from '../components/Field';
 import { changePassword, changeUsername, deleteAccount } from '../lib/account';
 import { exportMyData } from '../lib/exporter';
@@ -151,6 +152,7 @@ export function Settings() {
         )}
       </section>
 
+      <PushSection />
       <OfflineSection />
       <BlockedSection />
       <AdminLink />
@@ -241,6 +243,50 @@ function AccountControl() {
         </form>
       )}
     </div>
+  );
+}
+
+function PushSection() {
+  const { caps } = useSession();
+  const [on, setOn] = useState<boolean | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+  useEffect(() => {
+    void currentSubscription().then((s) => setOn(!!s));
+  }, []);
+  return (
+    <section className="section" aria-labelledby="push-h">
+      <h2 id="push-h">Notifications on this device</h2>
+      <p className="section-lede">
+        Get a notification for messages, invitations, comments and follows. Arai sends only a wake-up signal; your device then fetches who did what over its own encrypted connection, so no content passes through Apple or Google. On iPhone this works in the app added to the Home Screen.
+      </p>
+      {!caps.push ? (
+        <Unavailable title="Notifications" reason="Push notifications are not configured on this server yet." action="Turn on" />
+      ) : !pushSupported() ? (
+        <p className="muted">This browser cannot receive notifications. On iPhone, add Arai to the Home Screen first.</p>
+      ) : (
+        <>
+          {msg && <Notice kind="error">{msg}</Notice>}
+          <button
+            type="button"
+            className={on ? 'btn btn-sm' : 'btn btn-primary btn-sm'}
+            aria-pressed={!!on}
+            disabled={on === null}
+            onClick={async () => {
+              setMsg(null);
+              try {
+                if (on) await disablePush();
+                else await enablePush();
+                setOn(!on);
+              } catch (e) {
+                setMsg(e instanceof Error && e.message === 'permission_denied' ? 'Notifications are blocked for Arai in this browser’s settings.' : errorMessage(e));
+              }
+            }}
+          >
+            {on ? 'Notifications are on · Turn off' : 'Turn on notifications'}
+          </button>
+        </>
+      )}
+    </section>
   );
 }
 

@@ -9,6 +9,8 @@ export interface Env {
   FEATURE_SMS: 'on' | 'off';
   FEATURE_GIFS?: 'on' | 'off';
   GIF_API_KEY?: string;
+  /** P-256 private key (JWK JSON) for Web Push (VAPID). Created by the deploy job. */
+  VAPID_PRIVATE_JWK?: string;
   REQUIRE_TURNSTILE?: 'true' | 'false';
   TURNSTILE_SITE_KEY?: string;
   AUTH_PEPPER?: string;
@@ -17,4 +19,4 @@ export interface Env {
   TURNSTILE_SECRET?: string;
 }
 
-export type AppBindings = { Bindings: Env; Variables: { requestId: string } };
+export type AppBindings = { Bindings: Env; Variables: { requestId: string; /** users to wake with a push after this request */ wake?: string[] } };

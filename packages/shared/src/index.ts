@@ -95,6 +95,7 @@ export interface Capabilities {
   emailDelivery: boolean; // email verification, email reset, email OTP, alerts
   sms: boolean; // SMS 2FA
   gifs: boolean; // GIF search (needs a provider key)
+  push: boolean; // Web Push (VAPID key configured)
   turnstileSiteKey: string | null;
 }
 
@@ -131,3 +132,4 @@ export const changePasswordRequest = z.object({
 export const changeUsernameRequest = z.object({ username, currentAuthKey: KEY });
 export const deleteAccountRequest = z.object({ currentAuthKey: KEY, confirm: z.literal('delete my account') });
 export const prefsRequest = z.object({ encData: b64(41, 48 * 1024) });
+export const pushSubscriptionRequest = z.object({ endpoint: z.string().url().max(1000) });

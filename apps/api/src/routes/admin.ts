@@ -154,7 +154,7 @@ admin.post('/admin/reports/:id', async (c) => {
   if (r.target_type === 'project') await reindexProject(c.env.DB, r.target_id);
   if (target) await reindexProfile(c.env.DB, target);
   await appendAudit(c.env.DB, { actorId: me, action: `moderation.${body.action}`, target: `${r.target_type}:${r.target_id}`, details: { report: c.req.param('id'), note: body.note || null } });
-  if (target && body.action !== 'dismiss') await notify(c.env.DB, target, 'moderation', null, null);
+  if (target && body.action !== 'dismiss') await notify(c.env.DB, target, 'moderation', null, null, c.var.wake);
   return c.json({ ok: true });
 });
 
