@@ -36,8 +36,13 @@ async function loadFile(db: D1Database, id: string): Promise<FileRow | null> {
 }
 
 export async function usage(db: D1Database, userId: string) {
-  const mine = await db.prepare("SELECT COALESCE(SUM(enc_size), 0) AS n FROM files WHERE uploader_id = ? AND status != 'deleted'").bind(userId).first<{ n: number }>();
-  const all = await db.prepare("SELECT COALESCE(SUM(enc_size), 0) AS n FROM files WHERE status != 'deleted'").first<{ n: number }>();
+  const mine = await db
+    .prepare("SELECT (SELECT COALESCE(SUM(enc_size), 0) FROM files WHERE uploader_id = ?1 AND status != 'deleted') + (SELECT COALESCE(SUM(enc_size), 0) FROM conv_files WHERE uploader_id = ?1 AND status != 'deleted') AS n")
+    .bind(userId)
+    .first<{ n: number }>();
+  const all = await db
+    .prepare("SELECT (SELECT COALESCE(SUM(enc_size), 0) FROM files WHERE status != 'deleted') + (SELECT COALESCE(SUM(enc_size), 0) FROM conv_files WHERE status != 'deleted') AS n")
+    .first<{ n: number }>();
   return { mine: mine?.n ?? 0, all: all?.n ?? 0 };
 }
 

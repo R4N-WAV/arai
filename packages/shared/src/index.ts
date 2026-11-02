@@ -94,6 +94,7 @@ export const recoverRequest = z.object({
 export interface Capabilities {
   emailDelivery: boolean; // email verification, email reset, email OTP, alerts
   sms: boolean; // SMS 2FA
+  gifs: boolean; // GIF search (needs a provider key)
   turnstileSiteKey: string | null;
 }
 

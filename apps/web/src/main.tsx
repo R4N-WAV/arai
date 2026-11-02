@@ -1,6 +1,8 @@
 import { StrictMode, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Discover } from './pages/Discover';
+import { Messages } from './pages/Messages';
+import { RealtimeProvider } from './lib/messages';
 import { Activity } from './pages/Activity';
 import { ListenPage, SharePage } from './pages/SharePage';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router';
@@ -10,7 +12,7 @@ import { SessionProvider, useSession } from './lib/session';
 import { PlayerProvider } from './lib/player';
 import { ProjectsProvider } from './lib/projects';
 import { MeProvider } from './lib/me';
-import { Library, NotBuilt } from './pages/Library';
+import { Library } from './pages/Library';
 import { NewProject } from './pages/NewProject';
 import { EditProfile } from './pages/EditProfile';
 import { ImportPage } from './pages/Import';
@@ -57,7 +59,9 @@ function SignedIn({ children }: { children: ReactNode }) {
   return (
     <ProjectsProvider key={user.id}>
       <PlayerProvider>
-        <MeProvider>{children}</MeProvider>
+        <MeProvider>
+          <RealtimeProvider>{children}</RealtimeProvider>
+        </MeProvider>
       </PlayerProvider>
     </ProjectsProvider>
   );
@@ -85,7 +89,8 @@ createRoot(document.getElementById('root')!).render(
             <Route path="projects/:id" element={<ProjectPage />} />
             <Route path="discover" element={<Discover />} />
             <Route path="activity" element={<Activity />} />
-            <Route path="messages" element={<NotBuilt title="Messages" />} />
+            <Route path="messages" element={<Messages />} />
+            <Route path="messages/:id" element={<Messages />} />
             <Route path="settings" element={<Settings />} />
             <Route path="profile/edit" element={<EditProfile />} />
             <Route path="import" element={<ImportPage />} />

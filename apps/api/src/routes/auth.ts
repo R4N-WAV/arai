@@ -20,6 +20,7 @@ export function capabilities(env: Env): Capabilities {
   return {
     emailDelivery: env.FEATURE_EMAIL === 'on',
     sms: env.FEATURE_SMS === 'on',
+    gifs: env.FEATURE_GIFS === 'on' && !!env.GIF_API_KEY,
     turnstileSiteKey: env.TURNSTILE_SITE_KEY ?? null,
   };
 }

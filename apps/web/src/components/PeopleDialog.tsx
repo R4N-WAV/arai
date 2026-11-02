@@ -80,6 +80,10 @@ export function PeopleDialog({ p, open, onClose }: { p: Project; open: boolean; 
   return (
     <Modal open={open} onClose={onClose} title="People">
       {error && <Notice kind="error">{error}</Notice>}
+      <p className="form-actions people-chat">
+        <button type="button" className="btn btn-sm" onClick={() => { onClose(); nav(`/messages/p-${p.id}`); }}>Open project chat</button>
+        <span className="row-sub">Everyone here can read it; it uses the project’s key.</span>
+      </p>
       {status && <Notice kind="ok">{status}</Notice>}
       {canAdmin && (
         <form className="invite-form" onSubmit={invite}>

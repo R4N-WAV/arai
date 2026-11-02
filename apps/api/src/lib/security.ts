@@ -7,7 +7,8 @@ export const CSP = [
   "style-src 'self'",
   "img-src 'self' blob: data:",
   "media-src 'self' blob:",
-  "connect-src 'self' blob:",
+  // 'self' covers same-origin WebSockets in current browsers; the production wss origin is listed for older Safari.
+  "connect-src 'self' blob: wss://arai.ranuj-s.workers.dev",
   "font-src 'self'",
   "frame-src https://challenges.cloudflare.com",
   "worker-src 'self'",

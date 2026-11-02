@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { b64 } from './encoding';
-import { entityId } from './tracks';
+import { entityId, validChunkLayout } from './tracks';
 
 export const memberRole = z.enum(['listener', 'editor', 'admin']);
 
@@ -135,3 +135,62 @@ export interface DiscoverProjectDto {
   owner: string;
   listenable: boolean;
 }
+
+// ---- messaging ----------------------------------------------------------------
+
+export const REACTIONS = ['like', 'love', 'laugh', 'wow', 'sad', 'fire'] as const;
+export type Reaction = (typeof REACTIONS)[number];
+const memberGrantC = z.object({ userId: z.string().min(1).max(64), wrappedKey: b64(80), signature: b64(64) });
+export const createConversationRequest = z.object({
+  id: entityId,
+  kind: z.enum(['dm', 'group']),
+  userIds: z.array(z.string().min(1).max(64)).min(1).max(31),
+  grants: z.array(memberGrantC).min(2).max(32),
+  encMeta: b64(41, 4096).optional(),
+});
+export const sendMessageRequest = z.object({ id: entityId, keyVersion: z.number().int().positive(), encBody: b64(41, 48 * 1024), replyTo: entityId.nullable().optional() });
+export const editMessageRequest = z.object({ keyVersion: z.number().int().positive(), encBody: b64(41, 48 * 1024) });
+export const addConversationMemberRequest = z.object({ userId: z.string().min(1).max(64), grants: z.array(z.object({ keyVersion: z.number().int().positive(), wrappedKey: b64(80), signature: b64(64) })).min(1).max(1000) });
+export const rotateConversationRequest = z.object({ keyVersion: z.number().int().min(2), encMeta: b64(41, 4096).nullable(), grants: z.array(memberGrantC).min(1).max(32) });
+export const convFileRequest = z
+  .object({ id: entityId, encSize: z.number().int().positive().max(25 * 1024 * 1024 + 25 * 40), chunkCount: z.number().int().positive().max(25) })
+  .refine((v) => validChunkLayout(v.encSize, v.chunkCount), 'invalid_layout');
+
+export interface ConversationDto {
+  id: string;
+  kind: 'dm' | 'group' | 'project';
+  projectId: string | null;
+  keyVersion: number;
+  encMeta: string | null;
+  grants: Array<{ keyVersion: number; wrappedKey: string; signature: string; grantedBy: string; granterSignKey: string }>;
+  members: Array<PersonDto & { status: 'active' | 'request' | 'left'; role: 'member' | 'admin'; lastReadAt: number; boxKey: string }>;
+  myStatus: 'active' | 'request';
+  myRole: 'member' | 'admin';
+  rotationDue: boolean;
+  unread: number;
+  lastMessageAt: number | null;
+  last: MessageDto | null;
+}
+export interface MessageDto {
+  id: string;
+  conversationId: string;
+  senderId: string;
+  keyVersion: number;
+  encBody: string | null;
+  replyTo: string | null;
+  createdAt: number;
+  editedAt: number | null;
+  reactions: Array<{ reaction: Reaction; userIds: string[] }>;
+}
+/** Plaintext inside a message's enc_body. */
+export interface MessageBody {
+  text: string;
+  attachments?: Array<{ fileId: string; key: string; name: string; mime: string; size: number; encSize: number; chunkCount: number }>;
+  gif?: { url: string; width: number; height: number };
+}
+export type RealtimeEvent =
+  | { type: 'message'; conversationId: string; message: MessageDto }
+  | { type: 'edit' | 'delete' | 'react'; conversationId: string; message: MessageDto }
+  | { type: 'typing'; conversationId: string; userId: string }
+  | { type: 'read'; conversationId: string; userId: string; at: number }
+  | { type: 'conversation'; conversationId: string };

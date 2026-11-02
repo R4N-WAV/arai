@@ -3,6 +3,7 @@ import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router';
 import { useSession } from '../lib/session';
 import { IconBell, IconDiscover, IconLibrary, IconMessages, IconSettings } from './Icons';
 import { useUnread } from '../lib/activity';
+import { useRealtime } from '../lib/messages';
 import { HomeLink } from './Logo';
 import { PlayerBar } from './PlayerBar';
 import { usePlayer } from '../lib/player';
@@ -53,6 +54,7 @@ export function AppShellWith({ children }: { children: ReactNode }) {
   const location = useLocation();
   useBottomChrome(Boolean(item));
   const unread = useUnread(location.pathname);
+  const { unread: unreadMessages } = useRealtime();
   const bell = (cls: string) => (
     <Link to="/activity" className={cls} aria-label={unread ? `Activity, ${unread} new` : 'Activity'} viewTransition>
       <IconBell />
@@ -62,7 +64,7 @@ export function AppShellWith({ children }: { children: ReactNode }) {
   );
   const navigate = useNavigate();
   // Top-level tabs have no back button; everything deeper does (installed apps have no browser back).
-  const isTop = ['/', '/discover', '/messages', '/settings', '/activity'].includes(location.pathname);
+  const isTop = ['/', '/discover', '/settings', '/activity'].includes(location.pathname) || location.pathname.startsWith('/messages');
   const goBack = () => (window.history.state?.idx > 0 ? navigate(-1) : navigate('/', { viewTransition: true }));
   const back = (cls: string) => !isTop && (
     <button type="button" className={`back-btn ${cls}`} onClick={goBack} aria-label="Back">
@@ -74,9 +76,10 @@ export function AppShellWith({ children }: { children: ReactNode }) {
   const { profile } = useMe();
   const me = profile ?? { username: user?.username ?? '', avatar: null, displayName: '' };
   const links = NAV.map(({ to, label, icon: Icon, end }) => (
-    <NavLink key={to} to={to} end={end} className="nav-link" viewTransition>
+    <NavLink key={to} to={to} end={end} className="nav-link" viewTransition aria-label={to === '/messages' && unreadMessages ? `${label}, ${unreadMessages} unread` : undefined}>
       <Icon />
       <span>{label}</span>
+      {to === '/messages' && unreadMessages > 0 && <span className="badge" aria-hidden="true">{unreadMessages > 9 ? '9+' : unreadMessages}</span>}
     </NavLink>
   ));
   return (

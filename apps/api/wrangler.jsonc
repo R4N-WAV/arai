@@ -24,16 +24,25 @@
   ],
   // Encrypted audio chunks (free-plan SQLite Durable Objects: no R2, no card).
   "durable_objects": {
-    "bindings": [{ "name": "FILES", "class_name": "FileStore" }]
+    "bindings": [
+      { "name": "FILES", "class_name": "FileStore" },
+      // Realtime: one hub per user for message events (hibernating WebSockets).
+      { "name": "HUB", "class_name": "UserHub" }
+    ]
   },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["FileStore"] }],
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["FileStore"] },
+    { "tag": "v2", "new_sqlite_classes": ["UserHub"] }
+  ],
   "vars": {
     "FEATURE_EMAIL": "off",
     "FEATURE_SMS": "off",
     "REQUIRE_TURNSTILE": "false",
     // Storage limits keep Arai inside Cloudflare's free 5 GB.
     "USER_QUOTA_BYTES": "524288000",
-    "PLATFORM_QUOTA_BYTES": "4500000000"
+    "PLATFORM_QUOTA_BYTES": "4500000000",
+    // GIF search needs a provider API key (e.g. Tenor/Giphy); off until one is configured.
+    "FEATURE_GIFS": "off"
   }
   // Secrets (wrangler secret put / .dev.vars, never committed):
   // AUTH_PEPPER, KDF_SALT_SECRET, IP_HMAC_SECRET, optional TURNSTILE_SECRET
