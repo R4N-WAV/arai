@@ -43,3 +43,10 @@ export async function deriveShareKeys(secretB64: string, password = ''): Promise
 export async function shareTokenHash(token: Uint8Array): Promise<Uint8Array> {
   return new Uint8Array(await crypto.subtle.digest('SHA-256', token as BufferSource));
 }
+
+/** A purpose-bound key derived from a master key (BLAKE2b keyed hash of the label). */
+export async function deriveSubkey(master: Uint8Array, label: string): Promise<Uint8Array> {
+  if (master.length < 32) throw new CryptoError('master key too short');
+  const s = await sodium();
+  return s.crypto_generichash(32, enc.encode(`arai/subkey/v1|${label}`), master) as Uint8Array;
+}

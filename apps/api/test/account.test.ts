@@ -52,3 +52,16 @@ describe('account control', () => {
     await registered('ac_gone');
   });
 });
+
+describe('library preferences', () => {
+  it('stores one encrypted blob per account, private to its owner', async () => {
+    const { c } = await registered('pref_a');
+    const { c: b } = await registered('pref_b');
+    expect((await c.call('GET', '/account/prefs')).json.prefs).toBeNull();
+    const enc = blob();
+    expect((await c.call('PUT', '/account/prefs', { encData: enc })).status).toBe(200);
+    expect((await c.call('GET', '/account/prefs')).json.prefs.encData).toBe(enc);
+    expect((await b.call('GET', '/account/prefs')).json.prefs).toBeNull();
+    expect((await c.call('PUT', '/account/prefs', { encData: 'not base64!' })).status).toBe(400);
+  });
+});

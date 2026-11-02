@@ -130,3 +130,4 @@ export const changePasswordRequest = z.object({
 });
 export const changeUsernameRequest = z.object({ username, currentAuthKey: KEY });
 export const deleteAccountRequest = z.object({ currentAuthKey: KEY, confirm: z.literal('delete my account') });
+export const prefsRequest = z.object({ encData: b64(41, 48 * 1024) });

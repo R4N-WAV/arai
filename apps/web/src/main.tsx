@@ -13,6 +13,7 @@ import { SessionProvider, useSession } from './lib/session';
 import { PlayerProvider } from './lib/player';
 import { ProjectsProvider } from './lib/projects';
 import { MeProvider } from './lib/me';
+import { LibraryProvider } from './lib/library';
 import { Library } from './pages/Library';
 import { NewProject } from './pages/NewProject';
 
@@ -69,11 +70,13 @@ function SignedIn({ children }: { children: ReactNode }) {
   if (!user || !keys) return <>{children}</>;
   return (
     <ProjectsProvider key={user.id}>
+      <LibraryProvider>
       <PlayerProvider>
         <MeProvider>
           <RealtimeProvider>{children}</RealtimeProvider>
         </MeProvider>
       </PlayerProvider>
+      </LibraryProvider>
     </ProjectsProvider>
   );
 }

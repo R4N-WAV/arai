@@ -37,7 +37,7 @@ Last updated: 2026-11-02 (session 12). Tests: 106 passing (crypto 20, shared 4, 
 ## Phase 2 — Music workspace
 - [x] Projects: create / list / view / edit / public↔private / delete — metadata encrypted per project key, signed self-grant, `requireProjectRole` authz, migration 0002 (11 API tests incl. cross-user, roles, revocation; E2E incl. no-plaintext check)
 - [x] Project colour drives the ambient background (focus mode on the project page)
-- [ ] Folders, ordering (+ keyboard alternative), favourites, recents
+- [x] Folders, favourites (pins), recents, search, sort (Phase 10)
 - [x] Encrypted chunked uploads to free-plan Durable Object storage (ADR-011): multi-file, drag-and-drop + picker, progress, cancel, resume/retry, magic-byte sniffing, quotas (migration 0003; 11 API tests)
 - [x] Duration/sample rate/channels + waveform peaks extracted client-side (encrypted in version metadata)
 - [x] Player: queue, play/pause, prev/next, scrubbable waveform (pointer + keyboard slider), volume, repeat, speed (pitch preserved); byte-exact lossless decrypt (E2E)
@@ -102,7 +102,7 @@ The owner asked to continue to phase 14. These phases take the remaining backlog
 - [x] Change password (account key re-wrapped in the browser; other sessions signed out) · [x] change username · [x] download my data (decrypted JSON) + “Download original” per track · [x] delete account (owned projects purged, messages/comments erased, name freed) — 3 API tests, account E2E
 
 ### Phase 10 — Library organisation
-- [ ] Search (client-side over decrypted names, tracks, tags) · [ ] pin favourites · [ ] recently played · [ ] sort · [ ] folders
+- [x] Search (client-side over decrypted names, tags, descriptions and track titles; plays results) · [x] pins · [x] recently played · [x] sort · [x] folders — all in one encrypted per-account preferences blob (migration 0010, key derived from the account key); API test + library E2E
 
 ### Phase 11 — Version tools
 - [ ] A/B compare two versions (same position, loudness-matched, instant switch) · [ ] AIFF → WAV in the browser for playback everywhere

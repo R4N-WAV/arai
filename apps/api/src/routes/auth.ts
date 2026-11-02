@@ -1,4 +1,4 @@
-import { CURRENT_KDF, changePasswordRequest, changeUsernameRequest, deleteAccountRequest, loginRequest, preloginRequest, recoverChallengeRequest, recoverRequest, registerRequest, type Capabilities } from '@arai/shared';
+import { CURRENT_KDF, prefsRequest, changePasswordRequest, changeUsernameRequest, deleteAccountRequest, loginRequest, preloginRequest, recoverChallengeRequest, recoverRequest, registerRequest, type Capabilities } from '@arai/shared';
 import { reindexProfile } from './social.js';
 import { purgeFiles } from './tracks.js';
 import { Hono, type Context } from 'hono';
@@ -401,6 +401,7 @@ authed.post('/account/delete', async (c) => {
     db.prepare('DELETE FROM notifications WHERE user_id = ? OR actor_id = ?').bind(id, id),
     db.prepare('DELETE FROM profile_images WHERE user_id = ?').bind(id),
     db.prepare('DELETE FROM profiles WHERE user_id = ?').bind(id),
+    db.prepare('DELETE FROM account_prefs WHERE user_id = ?').bind(id),
     db.prepare("DELETE FROM search_index WHERE kind = 'user' AND ref = ?").bind(id),
     db.prepare('UPDATE user_keys SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL').bind(now, id),
     db.prepare('UPDATE sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL').bind(now, id),
@@ -416,6 +417,23 @@ authed.post('/account/delete', async (c) => {
   await appendAudit(db, { actorId: id, action: 'account.deleted', target: `user:${id}`, details: { projects: owned.length } });
   clearSessionCookie(c);
   return c.json({ ok: true });
+});
+
+// ---- private library preferences (phase 10) ------------------------------------
+authed.get('/account/prefs', async (c) => {
+  const row = await c.env.DB.prepare('SELECT enc_data, updated_at FROM account_prefs WHERE user_id = ?').bind(c.get('session').user_id).first<{ enc_data: ArrayBuffer; updated_at: number }>();
+  return c.json({ prefs: row ? { encData: toB64(row.enc_data), updatedAt: row.updated_at } : null });
+});
+authed.put('/account/prefs', async (c) => {
+  const body = await parseBody(c, prefsRequest);
+  if (!body) return bad(c);
+  const s = c.get('session');
+  if (!(await rateLimit(c.env.DB, `prefs:${s.user_id}`, 600, 3600_000))) return tooMany(c);
+  const now = Date.now();
+  await c.env.DB.prepare('INSERT INTO account_prefs (user_id, enc_data, updated_at) VALUES (?, ?, ?) ON CONFLICT(user_id) DO UPDATE SET enc_data = excluded.enc_data, updated_at = excluded.updated_at')
+    .bind(s.user_id, fromB64(body.encData), now)
+    .run();
+  return c.json({ updatedAt: now });
 });
 
 auth.route('/', authed);

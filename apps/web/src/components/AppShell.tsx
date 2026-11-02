@@ -4,6 +4,7 @@ import { useSession } from '../lib/session';
 import { IconBell, IconDiscover, IconLibrary, IconMessages, IconSettings } from './Icons';
 import { useUnread } from '../lib/activity';
 import { useRealtime } from '../lib/messages';
+import { useLibrary } from '../lib/library';
 import { HomeLink } from './Logo';
 import { PlayerBar } from './PlayerBar';
 import { usePlayer } from '../lib/player';
@@ -51,6 +52,13 @@ function useBottomChrome(active: unknown) {
 export function AppShellWith({ children }: { children: ReactNode }) {
   const { user, signOut } = useSession();
   const { item } = usePlayer();
+  const { recordPlay } = useLibrary();
+  const playedId = item?.track.id;
+  useEffect(() => {
+    if (item) recordPlay({ projectId: item.project.id, trackId: item.track.id, title: item.track.title });
+    // Record once per track change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playedId]);
   const location = useLocation();
   useBottomChrome(Boolean(item));
   const unread = useUnread(location.pathname);

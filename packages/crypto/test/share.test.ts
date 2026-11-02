@@ -27,3 +27,14 @@ describe('share links', () => {
     await expect(deriveShareKeys('abc')).rejects.toThrow();
   });
 });
+
+describe('subkeys', () => {
+  it('are deterministic per label and differ across labels', async () => {
+    const { deriveSubkey, generateKey } = await import('../src/index.js');
+    const m = await generateKey();
+    const a = await deriveSubkey(m, 'library');
+    expect(hex(a)).toBe(hex(await deriveSubkey(m, 'library')));
+    expect(hex(a)).not.toBe(hex(await deriveSubkey(m, 'other')));
+    expect(hex(a)).not.toBe(hex(await deriveSubkey(await generateKey(), 'library')));
+  });
+});
