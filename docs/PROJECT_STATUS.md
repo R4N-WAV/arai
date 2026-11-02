@@ -89,5 +89,29 @@ Last updated: 2026-11-02 (session 12). Tests: 106 passing (crypto 20, shared 4, 
 - [x] Dashboard `/admin`: stats, reports queue with actions (dismiss, hide/unhide project, restrict, suspend, reactivate, ban [owner], remove comment/message), moderators (owner), audit log with live chain verification
 - [x] Restricted accounts cannot publish, share or start conversations; suspended/banned accounts are signed out everywhere
 
-## Phase 8 — Release
-- [ ] Security audit · [ ] a11y audit · [ ] responsive tests · [ ] perf · [ ] deployment & backup docs · [ ] release checklist
+## Phase 8 — Testing & release
+- [x] Lint (oxlint; correctness errors fail CI and deploy) · [x] route-level code splitting (main bundle 548 → 318 kB)
+- [x] Accessibility: axe (WCAG 2.0–2.2 A/AA) on 13 screens + overlays at 360/768/1280 px — zero serious/critical (`e2e/a11y-flow.mjs`); fixed cover-title contrast
+- [x] Security suite mapping (RELEASE_CHECKLIST.md) · [x] RUNBOOK.md (deploy, secrets, backups, restore drill, incidents, capacity) · [x] RELEASE_CHECKLIST.md
+- [ ] Manual device pass (iPhone/Android/Safari/Firefox) and first restore drill — owner, see checklist
+
+## Phases 9–14 (defined in session 13; the original spec ends at phase 8)
+The owner asked to continue to phase 14. These phases take the remaining backlog in a sensible order.
+
+### Phase 9 — Account control
+- [ ] Change password (re-wrap vault; other sessions signed out) · [ ] change username · [ ] export my data (decrypted in the browser) · [ ] delete account
+
+### Phase 10 — Library organisation
+- [ ] Search (client-side over decrypted names, tracks, tags) · [ ] pin favourites · [ ] recently played · [ ] sort · [ ] folders
+
+### Phase 11 — Version tools
+- [ ] A/B compare two versions (same position, loudness-matched, instant switch) · [ ] AIFF → WAV in the browser for playback everywhere
+
+### Phase 12 — Playback engine
+- [ ] Gapless playback between tracks · [ ] independent pitch shift (semitones, speed unchanged)
+
+### Phase 13 — Notifications & installed app
+- [ ] Web Push (VAPID) for messages, invitations and comments, opt-in per device · [ ] app icon badge · [ ] "new version available" prompt
+
+### Phase 14 — Help, privacy & onboarding
+- [ ] First-run guide · [ ] keyboard shortcut sheet · [ ] plain-language privacy page (what is encrypted, what the server sees) · [ ] help page

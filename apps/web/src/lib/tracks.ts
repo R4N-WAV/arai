@@ -324,7 +324,7 @@ export async function audioUrl(project: Project, v: TrackVersion, onProgress?: (
   if (cached) return cached;
   const fileKey = await fileKeyOf(project, v);
   const n = v.file.chunkCount;
-  const parts: Uint8Array[] = new Array(n);
+  const parts: Uint8Array[] = Array.from({ length: n });
   let done = 0;
   let next = 0;
   const worker = async () => {

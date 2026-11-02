@@ -268,8 +268,14 @@ tracks.patch('/tracks/:trackId', async (c) => {
     sets.push('enc_meta = ?', 'key_version = ?');
     args.push(fromB64(body.encMeta), body.keyVersion);
   }
-  if (body.currentVersionId !== undefined) (sets.push('current_version_id = ?'), args.push(body.currentVersionId));
-  if (body.position !== undefined) (sets.push('position = ?'), args.push(body.position));
+  if (body.currentVersionId !== undefined) {
+    sets.push('current_version_id = ?');
+    args.push(body.currentVersionId);
+  }
+  if (body.position !== undefined) {
+    sets.push('position = ?');
+    args.push(body.position);
+  }
   await c.env.DB.prepare(`UPDATE tracks SET ${sets.join(', ')} WHERE id = ?`).bind(...args, trackId).run();
   return c.json({ track: (await listTracks(c.env.DB, projectId, trackId))[0] });
 });

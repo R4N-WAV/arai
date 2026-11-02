@@ -69,7 +69,10 @@ function NewConversation({ open, onClose, onCreated }: { open: boolean; onClose:
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
-    if (open) (setNames(''), setGroup(''), setError(null));
+    if (!open) return;
+    setNames('');
+    setGroup('');
+    setError(null);
   }, [open]);
   const list = names.split(/[\s,]+/).map((n) => n.replace(/^@/, '')).filter(Boolean);
   const submit = async (e: FormEvent) => {

@@ -8,7 +8,6 @@ import { decodeWave, deleteTrack, loadTracks, makeCurrent, UPLOAD_ERRORS, Upload
 import { Menu } from './Menu';
 import { Modal } from './Modal';
 import { Notice } from './Unavailable';
-import { Waveform } from './Waveform';
 import { VersionComments } from './Comments';
 import { TrimDialog } from './TrimDialog';
 import { isOffline, keepOffline, offlineSupported, removeOffline } from '../lib/offline';

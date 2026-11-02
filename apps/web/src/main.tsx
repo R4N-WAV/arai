@@ -1,11 +1,11 @@
-import { StrictMode, type ReactNode } from 'react';
+import { lazy, StrictMode, Suspense, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { Discover } from './pages/Discover';
-import { AdminPage } from './pages/Admin';
-import { Messages } from './pages/Messages';
+
+
+
 import { RealtimeProvider } from './lib/messages';
-import { Activity } from './pages/Activity';
-import { ListenPage, SharePage } from './pages/SharePage';
+
+
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router';
 import { AmbientProvider } from './components/Ambient';
 import { AppShell, AppShellWith } from './components/AppShell';
@@ -15,17 +15,27 @@ import { ProjectsProvider } from './lib/projects';
 import { MeProvider } from './lib/me';
 import { Library } from './pages/Library';
 import { NewProject } from './pages/NewProject';
-import { EditProfile } from './pages/EditProfile';
-import { ImportPage } from './pages/Import';
+
+
 import { ProfilePage, PublicProfilePage } from './pages/Profile';
 import { ProjectPage } from './pages/Project';
-import { Recover } from './pages/Recover';
+
 import { Register } from './pages/Register';
-import { Settings } from './pages/Settings';
+
 import { SignIn } from './pages/SignIn';
 import { Unlock } from './pages/Unlock';
 import { startStreamingWorker } from './lib/stream';
 import './styles/app.css';
+const Recover = lazy(() => import('./pages/Recover').then((m) => ({ default: m.Recover })));
+const Settings = lazy(() => import('./pages/Settings').then((m) => ({ default: m.Settings })));
+const ImportPage = lazy(() => import('./pages/Import').then((m) => ({ default: m.ImportPage })));
+const EditProfile = lazy(() => import('./pages/EditProfile').then((m) => ({ default: m.EditProfile })));
+const SharePage = lazy(() => import('./pages/SharePage').then((m) => ({ default: m.SharePage })));
+const ListenPage = lazy(() => import('./pages/SharePage').then((m) => ({ default: m.ListenPage })));
+const Activity = lazy(() => import('./pages/Activity').then((m) => ({ default: m.Activity })));
+const Messages = lazy(() => import('./pages/Messages').then((m) => ({ default: m.Messages })));
+const AdminPage = lazy(() => import('./pages/Admin').then((m) => ({ default: m.AdminPage })));
+const Discover = lazy(() => import('./pages/Discover').then((m) => ({ default: m.Discover })));
 
 void startStreamingWorker();
 
@@ -80,6 +90,7 @@ createRoot(document.getElementById('root')!).render(
     <SessionProvider>
       <SignedIn>
       <BrowserRouter>
+        <Suspense fallback={<p className="loading" role="status">Loading…</p>}>
         <Routes>
           <Route path="/signin" element={<GuestOnly><SignIn /></GuestOnly>} />
           <Route path="/register" element={<GuestOnly><Register /></GuestOnly>} />
@@ -102,6 +113,7 @@ createRoot(document.getElementById('root')!).render(
           <Route path="/listen/:projectId" element={<ListenPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        </Suspense>
       </BrowserRouter>
       </SignedIn>
     </SessionProvider>

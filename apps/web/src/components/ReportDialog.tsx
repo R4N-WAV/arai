@@ -21,7 +21,11 @@ export function ReportDialog({ open, onClose, targetType, targetId, label, evide
   const [state, setState] = useState<'idle' | 'busy' | 'done'>('idle');
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
-    if (open) (setState('idle'), setError(null), setDetails(''), setShare(false));
+    if (!open) return;
+    setState('idle');
+    setError(null);
+    setDetails('');
+    setShare(false);
   }, [open]);
   const submit = async (e: FormEvent) => {
     e.preventDefault();
