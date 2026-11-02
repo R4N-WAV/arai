@@ -2,6 +2,10 @@ import { useCallback, useEffect, useState } from 'react';
 import { EMAIL_REASON, Notice, SMS_REASON, Unavailable } from '../components/Unavailable';
 import { api, errorMessage } from '../lib/api';
 import { useSession } from '../lib/session';
+import { Field } from '../components/Field';
+import { changePassword, changeUsername, deleteAccount } from '../lib/account';
+import { exportMyData } from '../lib/exporter';
+import { useProjects } from '../lib/projects';
 import type { PersonDto } from '@arai/shared';
 import { Link } from 'react-router';
 import { clearOffline, offlineFiles, offlineSupported, removeOffline } from '../lib/offline';
@@ -75,6 +79,7 @@ export function Settings() {
         {!caps.emailDelivery && !user?.emailVerified && (
           <Unavailable title="Verify email" reason={`${EMAIL_REASON} Until then, sign in with your username.`} action="Send verification email" />
         )}
+        <AccountControl />
       </section>
 
       <section className="section" aria-labelledby="mfa">
@@ -150,6 +155,92 @@ export function Settings() {
       <BlockedSection />
       <AdminLink />
     </>
+  );
+}
+
+function AccountControl() {
+  const { user, keys, unlockInfo, refresh, signOut } = useSession();
+  const { projects } = useProjects();
+  const [open, setOpen] = useState<'password' | 'username' | 'export' | 'delete' | null>(null);
+  const [cur, setCur] = useState('');
+  const [next, setNext] = useState('');
+  const [next2, setNext2] = useState('');
+  const [name, setName] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [busy, setBusy] = useState<string | null>(null);
+  const [msg, setMsg] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
+  const reset = (o: typeof open) => { setOpen(o); setCur(''); setNext(''); setNext2(''); setName(''); setConfirm(''); setMsg(null); };
+  const run = async (label: string, fn: () => Promise<unknown>, done: string) => {
+    setBusy(label);
+    setMsg(null);
+    try {
+      await fn();
+      setMsg({ kind: 'ok', text: done });
+      setOpen(null);
+    } catch (e) {
+      const m = e instanceof Error && e.message === 'vault_unlock_failed' ? 'That is not your current password.' : errorMessage(e);
+      setMsg({ kind: 'error', text: m });
+    } finally {
+      setBusy(null);
+    }
+  };
+  if (!unlockInfo || !keys || !user) return null;
+  const weak = next.length > 0 && next.length < 10;
+  return (
+    <div className="account-control">
+      {msg && <Notice kind={msg.kind}>{msg.text}</Notice>}
+      <div className="form-actions">
+        <button type="button" className="btn btn-sm" aria-expanded={open === 'password'} onClick={() => reset(open === 'password' ? null : 'password')}>Change password</button>
+        <button type="button" className="btn btn-sm" aria-expanded={open === 'username'} onClick={() => reset(open === 'username' ? null : 'username')}>Change username</button>
+        <button type="button" className="btn btn-sm" aria-expanded={open === 'export'} onClick={() => reset(open === 'export' ? null : 'export')}>Download my data</button>
+        <button type="button" className="btn btn-ghost btn-sm" aria-expanded={open === 'delete'} onClick={() => reset(open === 'delete' ? null : 'delete')}>Delete account…</button>
+      </div>
+      {open === 'password' && (
+        <form className="share-form" onSubmit={(e) => { e.preventDefault(); void run('pw', () => changePassword(unlockInfo, keys, cur, next).then(refresh), 'Password changed. Other devices were signed out.'); }}>
+          <Field label="Current password" type="password" value={cur} onChange={(e) => setCur(e.target.value)} autoComplete="current-password" />
+          <Field label="New password" type="password" value={next} onChange={(e) => setNext(e.target.value)} autoComplete="new-password" hint="At least 10 characters. Your recovery key keeps working." error={weak ? 'Use at least 10 characters.' : undefined} />
+          <Field label="Repeat new password" type="password" value={next2} onChange={(e) => setNext2(e.target.value)} autoComplete="new-password" error={next2 && next2 !== next ? 'The passwords do not match.' : undefined} />
+          <button type="submit" className="btn btn-primary btn-sm" disabled={!!busy || !cur || next.length < 10 || next !== next2}>{busy ? 'Re-encrypting…' : 'Change password'}</button>
+        </form>
+      )}
+      {open === 'username' && (
+        <form className="share-form" onSubmit={(e) => { e.preventDefault(); void run('un', () => changeUsername(unlockInfo, cur, name.trim()).then(refresh), 'Username changed. Your old profile link no longer works.'); }}>
+          <Field label="New username" value={name} onChange={(e) => setName(e.target.value)} autoComplete="username" autoCapitalize="none" spellCheck={false} hint="3–30 letters, numbers, _ or ." />
+          <Field label="Password" type="password" value={cur} onChange={(e) => setCur(e.target.value)} autoComplete="current-password" />
+          <button type="submit" className="btn btn-primary btn-sm" disabled={!!busy || !/^[A-Za-z0-9_.]{3,30}$/.test(name.trim()) || !cur}>Change username</button>
+        </form>
+      )}
+      {open === 'export' && (
+        <div className="share-form">
+          <p className="row-sub">Your profile, projects (names, details, versions, comments) and messages, decrypted here in your browser into one JSON file. Audio is not included: use “Download original” on a track.</p>
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            disabled={!!busy}
+            onClick={() =>
+              void run('ex', async () => {
+                const blob = await exportMyData(user.id, keys, projects ?? [], (s) => setBusy(s));
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = `arai-${user.username}-${new Date().toISOString().slice(0, 10)}.json`;
+                a.click();
+                setTimeout(() => URL.revokeObjectURL(a.href), 10_000);
+              }, 'Your data was saved.')
+            }
+          >
+            {busy ? `Collecting… ${busy}` : 'Prepare download'}
+          </button>
+        </div>
+      )}
+      {open === 'delete' && (
+        <form className="share-form danger" onSubmit={(e) => { e.preventDefault(); void run('del', async () => { await deleteAccount(unlockInfo, cur); await signOut(); }, 'Your account was deleted.'); }}>
+          <p className="row-sub">This deletes your profile, every project you own (for everyone you shared it with) and erases your messages and comments. It cannot be undone. Download your data first if you want a copy.</p>
+          <Field label="Type “delete my account”" value={confirm} onChange={(e) => setConfirm(e.target.value)} autoComplete="off" />
+          <Field label="Password" type="password" value={cur} onChange={(e) => setCur(e.target.value)} autoComplete="current-password" />
+          <button type="submit" className="btn btn-danger btn-sm" disabled={!!busy || confirm !== 'delete my account' || !cur}>Delete my account</button>
+        </form>
+      )}
+    </div>
   );
 }
 

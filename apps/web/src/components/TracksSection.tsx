@@ -4,6 +4,7 @@ import { formatBytes, formatTime } from '../lib/audio';
 import { useFlip } from '../lib/flip';
 import { usePlayer } from '../lib/player';
 import type { Project } from '../lib/projects';
+import { downloadOriginal } from '../lib/tracks';
 import { decodeWave, deleteTrack, loadTracks, makeCurrent, UPLOAD_ERRORS, UploadJob, type Track, type TrackVersion, type WaveData } from '../lib/tracks';
 import { Menu } from './Menu';
 import { Modal } from './Modal';
@@ -142,6 +143,7 @@ function TrackRow(props: {
             { label: open ? 'Hide versions' : 'Versions and insights', onSelect: props.onToggle },
             ...(canEdit ? [{ label: 'Upload new version', onSelect: props.onNewVersion }] : []),
             ...(canEdit && t.current?.meta?.duration ? [{ label: 'Trim…', onSelect: () => setTrimming(t.current) }] : []),
+            ...(t.current ? [{ label: 'Download original', onSelect: () => void downloadOriginal(props.project, t.current!) }] : []),
             ...(offlineSupported() && t.current ? [{ label: offline ? 'Remove offline copy' : 'Keep offline', onSelect: () => void toggleOffline() }] : []),
             ...(canAdmin ? [{ label: 'Delete track…', onSelect: () => { if (!open) props.onToggle(); setConfirm(true); }, danger: true }] : []),
           ]}

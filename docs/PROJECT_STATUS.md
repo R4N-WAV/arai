@@ -28,11 +28,11 @@ Last updated: 2026-11-02 (session 12). Tests: 106 passing (crypto 20, shared 4, 
 - [!] Email verification, email sign-in, email reset, email OTP — blocked: email provider + domain (deferred by owner)
 - [!] SMS 2FA — blocked: paid SMS provider (deferred by owner)
 - [ ] 2FA recovery codes (only meaningful once a 2FA method exists)
-- [ ] Password change (signed in), username change, email change
+- [x] Password change, username change (Phase 9) · [!] email change (needs email delivery to verify)
 - [x] Visual identity "ambient space" implemented (DESIGN_SYSTEM.md): hand-lettered அறை logo outlined to SVG, self-hosted fonts, ambient background engine (`ambientPalette` + `Ambient.tsx`), all screens restyled; E2E green
 - [x] Logo click / reload keeps the tab unlocked (`tabvault.ts`)
 - [ ] ESLint; axe accessibility checks in E2E; lazy-load crypto (main bundle 905 kB / 304 kB gz)
-- [ ] Account export & deletion
+- [x] Account export & deletion (Phase 9)
 
 ## Phase 2 — Music workspace
 - [x] Projects: create / list / view / edit / public↔private / delete — metadata encrypted per project key, signed self-grant, `requireProjectRole` authz, migration 0002 (11 API tests incl. cross-user, roles, revocation; E2E incl. no-plaintext check)
@@ -99,7 +99,7 @@ Last updated: 2026-11-02 (session 12). Tests: 106 passing (crypto 20, shared 4, 
 The owner asked to continue to phase 14. These phases take the remaining backlog in a sensible order.
 
 ### Phase 9 — Account control
-- [ ] Change password (re-wrap vault; other sessions signed out) · [ ] change username · [ ] export my data (decrypted in the browser) · [ ] delete account
+- [x] Change password (account key re-wrapped in the browser; other sessions signed out) · [x] change username · [x] download my data (decrypted JSON) + “Download original” per track · [x] delete account (owned projects purged, messages/comments erased, name freed) — 3 API tests, account E2E
 
 ### Phase 10 — Library organisation
 - [ ] Search (client-side over decrypted names, tracks, tags) · [ ] pin favourites · [ ] recently played · [ ] sort · [ ] folders

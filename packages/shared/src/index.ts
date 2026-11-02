@@ -116,3 +116,17 @@ export * from './projects';
 export * from './tracks';
 export * from './profiles';
 export * from './collab';
+
+// ---- account control (phase 9) ------------------------------------------------
+export const changePasswordRequest = z.object({
+  currentAuthKey: KEY,
+  saltUsername: b64(16),
+  saltEmail: b64(16),
+  kdf: kdfParams,
+  authKeyUsername: KEY,
+  authKeyEmail: KEY,
+  encAskUsername: BLOB,
+  encAskEmail: BLOB,
+});
+export const changeUsernameRequest = z.object({ username, currentAuthKey: KEY });
+export const deleteAccountRequest = z.object({ currentAuthKey: KEY, confirm: z.literal('delete my account') });

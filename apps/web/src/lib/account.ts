@@ -128,3 +128,39 @@ export async function recoverWithKey(username: string, recoveryCode: string, new
   const s = await api<{ unlock: UnlockInfo }>('GET', '/auth/session');
   return decryptPrivateKeys(ask, await fromBase64Url(s.unlock.encPrivateKeys));
 }
+
+// ---- account control (phase 9) ------------------------------------------------
+
+/** The current password's auth key (proves the password without sending it). */
+export async function currentAuthKey(info: UnlockInfo, password: string): Promise<string> {
+  const pk = await deriveInWorker(password, await fromBase64Url(info.salt), info.kdf);
+  // Check locally first: a wrong password cannot open the vault.
+  await openVault(pk.vaultKey, info);
+  return b64(pk.authKey);
+}
+
+/** New password: the account key is re-wrapped here, so everything stays readable. */
+export async function changePassword(info: UnlockInfo, keys: AccountKeys, current: string, next: string): Promise<void> {
+  const currentKey = await currentAuthKey(info, current);
+  const [saltU, saltE] = [await generateSalt(), await generateSalt()];
+  const pkU = await deriveInWorker(next, saltU, CURRENT_KDF);
+  const pkE = await deriveInWorker(next, saltE, CURRENT_KDF);
+  await api('POST', '/account/password', {
+    currentAuthKey: currentKey,
+    saltUsername: await b64(saltU),
+    saltEmail: await b64(saltE),
+    kdf: CURRENT_KDF,
+    authKeyUsername: await b64(pkU.authKey),
+    authKeyEmail: await b64(pkE.authKey),
+    encAskUsername: await b64(await wrapAccountKey(pkU.vaultKey, keys.ask, 'password-username')),
+    encAskEmail: await b64(await wrapAccountKey(pkE.vaultKey, keys.ask, 'password-email')),
+  });
+}
+
+export async function changeUsername(info: UnlockInfo, password: string, username: string): Promise<void> {
+  await api('POST', '/account/username', { username, currentAuthKey: await currentAuthKey(info, password) });
+}
+
+export async function deleteAccount(info: UnlockInfo, password: string): Promise<void> {
+  await api('POST', '/account/delete', { currentAuthKey: await currentAuthKey(info, password), confirm: 'delete my account' });
+}

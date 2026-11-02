@@ -1,5 +1,6 @@
-import { CURRENT_KDF, loginRequest, preloginRequest, recoverChallengeRequest, recoverRequest, registerRequest, type Capabilities } from '@arai/shared';
+import { CURRENT_KDF, changePasswordRequest, changeUsernameRequest, deleteAccountRequest, loginRequest, preloginRequest, recoverChallengeRequest, recoverRequest, registerRequest, type Capabilities } from '@arai/shared';
 import { reindexProfile } from './social.js';
+import { purgeFiles } from './tracks.js';
 import { Hono, type Context } from 'hono';
 import type { AppBindings, Env } from '../env.js';
 import { appendAudit } from '../lib/audit.js';
@@ -314,6 +315,107 @@ authed.get('/account/login-history', async (c) => {
     .bind(s.user_id)
     .all<{ at: number; success: number; ua_summary: string | null; suspicious: number }>();
   return c.json({ events: results.map((r) => ({ at: r.at, success: r.success === 1, device: r.ua_summary, newDevice: r.suspicious === 1 })) });
+});
+
+// ---- account control (phase 9) ----------------------------------------------
+
+/** Proves the caller knows the current password (its username-path auth key). */
+async function passwordOk(env: Env, db: D1Database, userId: string, authKey: string): Promise<boolean> {
+  const row = await db.prepare('SELECT auth_hash_u FROM credentials WHERE user_id = ?').bind(userId).first<{ auth_hash_u: ArrayBuffer }>();
+  return !!row && timingSafeEqual(await authHash(env, authKey), new Uint8Array(row.auth_hash_u));
+}
+
+authed.post('/account/password', async (c) => {
+  const body = await parseBody(c, changePasswordRequest);
+  if (!body) return bad(c);
+  const s = c.get('session');
+  if (!(await rateLimit(c.env.DB, `pw-change:${s.user_id}`, 10, 3600_000))) return tooMany(c);
+  if (JSON.stringify(body.kdf) !== JSON.stringify(CURRENT_KDF)) return bad(c);
+  if (!(await passwordOk(c.env, c.env.DB, s.user_id, body.currentAuthKey))) return c.json({ error: 'invalid_credentials' }, 401);
+  const now = Date.now();
+  // The account key itself is unchanged (re-wrapped in the browser), so all
+  // encrypted content stays readable. Every other session is signed out.
+  await c.env.DB.batch([
+    c.env.DB.prepare('UPDATE credentials SET salt_username = ?, salt_email = ?, auth_hash_u = ?, auth_hash_e = ?, updated_at = ? WHERE user_id = ?').bind(
+      fromB64(body.saltUsername), fromB64(body.saltEmail), await authHash(c.env, body.authKeyUsername), await authHash(c.env, body.authKeyEmail), now, s.user_id,
+    ),
+    c.env.DB.prepare('UPDATE vaults SET enc_ask_username = ?, enc_ask_email = ?, version = version + 1, updated_at = ? WHERE user_id = ?').bind(fromB64(body.encAskUsername), fromB64(body.encAskEmail), now, s.user_id),
+    c.env.DB.prepare('UPDATE sessions SET revoked_at = ? WHERE user_id = ? AND id != ? AND revoked_at IS NULL').bind(now, s.user_id, s.session_id),
+  ]);
+  await appendAudit(c.env.DB, { actorId: s.user_id, action: 'account.password_changed', target: `user:${s.user_id}` });
+  return c.json({ ok: true });
+});
+
+authed.post('/account/username', async (c) => {
+  const body = await parseBody(c, changeUsernameRequest);
+  if (!body) return bad(c);
+  const s = c.get('session');
+  if (!(await rateLimit(c.env.DB, `uname-change:${s.user_id}`, 3, 24 * 3600_000))) return tooMany(c);
+  if (!(await passwordOk(c.env, c.env.DB, s.user_id, body.currentAuthKey))) return c.json({ error: 'invalid_credentials' }, 401);
+  try {
+    await c.env.DB.prepare('UPDATE users SET username = ? WHERE id = ?').bind(body.username, s.user_id).run();
+  } catch (e) {
+    if (String(e).includes('UNIQUE')) return c.json({ error: 'username_taken' }, 409);
+    throw e;
+  }
+  await reindexProfile(c.env.DB, s.user_id);
+  await appendAudit(c.env.DB, { actorId: s.user_id, action: 'account.username_changed', target: `user:${s.user_id}`, details: { from: s.username, to: body.username } });
+  return c.json({ ok: true, username: body.username });
+});
+
+/**
+ * Deletes the account. Projects you own are deleted for everyone (their audio
+ * is purged), your messages are erased, your memberships, follows, friendships
+ * and profile go. A tombstone row remains so foreign keys and the audit log
+ * stay intact; the username is freed.
+ */
+authed.post('/account/delete', async (c) => {
+  const body = await parseBody(c, deleteAccountRequest);
+  if (!body) return bad(c);
+  const s = c.get('session');
+  if (!(await rateLimit(c.env.DB, `delete:${s.user_id}`, 5, 3600_000))) return tooMany(c);
+  if (!(await passwordOk(c.env, c.env.DB, s.user_id, body.currentAuthKey))) return c.json({ error: 'invalid_credentials' }, 401);
+  const owner = await c.env.DB.prepare("SELECT 1 FROM platform_roles WHERE user_id = ? AND role = 'owner'").bind(s.user_id).first();
+  if (owner) return c.json({ error: 'platform_owner' }, 409);
+  const id = s.user_id;
+  const now = Date.now();
+  const { results: owned } = await c.env.DB.prepare('SELECT id FROM projects WHERE owner_id = ? AND deleted_at IS NULL').bind(id).all<{ id: string }>();
+  const db = c.env.DB;
+  await db.batch([
+    db.prepare("UPDATE projects SET deleted_at = ?, visibility = 'private', public_meta = NULL, published_at = NULL WHERE owner_id = ? AND deleted_at IS NULL").bind(now, id),
+    db.prepare('UPDATE share_links SET revoked_at = ? WHERE project_id IN (SELECT id FROM projects WHERE owner_id = ?) AND revoked_at IS NULL').bind(now, id),
+    db.prepare('DELETE FROM project_art WHERE project_id IN (SELECT id FROM projects WHERE owner_id = ?)').bind(id),
+    db.prepare('UPDATE project_members SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL').bind(now, id),
+    db.prepare('DELETE FROM project_keys WHERE user_id = ?').bind(id),
+    // Projects they were in need a new key (they held the old one).
+    db.prepare('UPDATE projects SET rotation_due = 1 WHERE id IN (SELECT project_id FROM project_members WHERE user_id = ?) AND owner_id != ?').bind(id, id),
+    db.prepare('UPDATE messages SET enc_body = NULL, deleted_at = ? WHERE sender_id = ? AND deleted_at IS NULL').bind(now, id),
+    db.prepare("UPDATE conversation_members SET status = 'left' WHERE user_id = ?").bind(id),
+    db.prepare('DELETE FROM conversation_keys WHERE user_id = ?').bind(id),
+    db.prepare("UPDATE conversations SET rotation_due = 1 WHERE kind = 'group' AND id IN (SELECT conversation_id FROM conversation_members WHERE user_id = ?)").bind(id),
+    db.prepare('UPDATE comments SET enc_body = NULL, deleted_at = ? WHERE author_id = ? AND deleted_at IS NULL').bind(now, id),
+    db.prepare('DELETE FROM message_reactions WHERE user_id = ?').bind(id),
+    db.prepare('DELETE FROM follows WHERE follower_id = ? OR followee_id = ?').bind(id, id),
+    db.prepare('DELETE FROM friendships WHERE user_a = ? OR user_b = ?').bind(id, id),
+    db.prepare('DELETE FROM blocks WHERE blocker_id = ? OR blocked_id = ?').bind(id, id),
+    db.prepare('DELETE FROM notifications WHERE user_id = ? OR actor_id = ?').bind(id, id),
+    db.prepare('DELETE FROM profile_images WHERE user_id = ?').bind(id),
+    db.prepare('DELETE FROM profiles WHERE user_id = ?').bind(id),
+    db.prepare("DELETE FROM search_index WHERE kind = 'user' AND ref = ?").bind(id),
+    db.prepare('UPDATE user_keys SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL').bind(now, id),
+    db.prepare('UPDATE sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL').bind(now, id),
+    db.prepare('DELETE FROM vaults WHERE user_id = ?').bind(id),
+    db.prepare('DELETE FROM credentials WHERE user_id = ?').bind(id),
+    db.prepare("UPDATE users SET status = 'deleted', deleted_at = ?, username = ?, email_normalized = '' WHERE id = ?").bind(now, `deleted_${id.slice(0, 20).replace(/[^A-Za-z0-9_]/g, '')}`, id),
+  ]);
+  for (const p of owned) {
+    const files = await db.prepare("SELECT id FROM files WHERE project_id = ? AND status != 'deleted'").bind(p.id).all<{ id: string }>();
+    await purgeFiles(c.env, c.executionCtx, p.id, files.results.map((f) => f.id));
+    await db.prepare("DELETE FROM search_index WHERE kind = 'project' AND ref = ?").bind(p.id).run();
+  }
+  await appendAudit(db, { actorId: id, action: 'account.deleted', target: `user:${id}`, details: { projects: owned.length } });
+  clearSessionCookie(c);
+  return c.json({ ok: true });
 });
 
 auth.route('/', authed);

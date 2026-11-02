@@ -361,3 +361,12 @@ export async function decodeWave(meta: VersionMeta | null): Promise<WaveData | n
     return null;
   }
 }
+
+/** Saves the original uploaded file (decrypted here) under its original name. */
+export async function downloadOriginal(project: Project, v: TrackVersion): Promise<void> {
+  const url = await audioUrl(project, v);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = v.meta?.fileName ?? `version-${v.number}`;
+  a.click();
+}
