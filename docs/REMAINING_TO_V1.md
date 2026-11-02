@@ -1,12 +1,12 @@
 # Remaining to V1
 
 V1 is released only when every item below is implemented, tested and the
-release gate in §3 passes. Current state (session 12): phases 0–7 built; Phase 8 (release hardening) remains. Email/SMS/GIFs deferred by owner (provider-gated).
+release gate in §3 passes. Current state (session 13): phases 0–14 built and tested; what remains is owner-side release work and provider-gated features.
 
 ## 1. Functional requirements outstanding
-Done (tested): accounts, sessions, recovery, profiles, projects, encrypted uploads and streaming, versions, collaboration (invites, roles, revocation with key rotation), comments, share links, public listening, follows/friends/blocks/reports, discovery, notifications, E2EE messaging with attachments, offline copies, trim, section loop, play counts, admin dashboard and moderation.
-Blocked by deferred providers: email verification, email reset, 2FA (email/SMS), invites by email, GIFs.
-Outstanding: password/username/email change, account export and deletion, artwork upload, folders, A/B version compare, gapless, independent pitch shift, AIFF→WAV rewrap, axe/ESLint/bundle size (Phase 8).
+Blocked by deferred providers: email verification, email change, email reset, email/SMS 2FA, invites by email, GIFs.
+Owner actions: manual device pass, restore drill, appoint platform owner, Turnstile keys (RELEASE_CHECKLIST.md).
+Possible later improvements (not required for V1): sample-accurate gapless, phase-vocoder pitch shift, translations.
 
 ## 2. Infrastructure / accounts the owner must provide
 | Item | Cost | Needed for |

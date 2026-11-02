@@ -1,6 +1,6 @@
 # Project Status — authoritative checklist
 
-Last updated: 2026-11-02 (session 12). Tests: 106 passing (crypto 20, shared 4, api 77, web 5) + browser E2E: `auth-flow`, `projects-flow`, `tracks-flow`, `profile-import-flow`, `collab-flow` (15), `messages-flow` (8), `audio-admin-flow` (7). `[x]` done & tested · `[~]` in progress · `[ ]` not started · `[!]` blocked.
+Last updated: 2026-11-02 (session 13). Tests: 117 unit/API (crypto 21, shared 4, api 85, web 7) + 15 browser E2E flows (auth, projects, tracks, profile-import, collab, messages, audio-admin, device-art, account, library, versions, playback, push, onboarding, a11y). `[x]` done & tested · `[~]` in progress · `[ ]` not started · `[!]` blocked.
 
 ## Phase 0 — Research & architecture
 - [x] Repository inspected (empty, greenfield)
@@ -114,4 +114,4 @@ The owner asked to continue to phase 14. These phases take the remaining backlog
 - [x] Web Push (VAPID, empty pushes: the device fetches names/counts itself, no content via push services), opt-in per device in Settings; messages (≤1/min per conversation), invitations, comments, follows, friend requests, moderation (migration 0011; 2 API tests; push E2E via CDP) · [x] app icon badge · [x] “Arai was updated · Reload” banner
 
 ### Phase 14 — Help, privacy & onboarding
-- [ ] First-run guide · [ ] keyboard shortcut sheet · [ ] plain-language privacy page (what is encrypted, what the server sees) · [ ] help page
+- [x] First-run guide (dismissal synced encrypted) · [x] keyboard shortcut sheet (press ?) · [x] plain-language /privacy (what is encrypted, what the server sees, exceptions) · [x] /help (FAQ + shortcuts) — onboarding E2E; both pages in the axe audit

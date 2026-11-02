@@ -156,6 +156,14 @@ export function Settings() {
       <OfflineSection />
       <BlockedSection />
       <AdminLink />
+      <section className="section" aria-labelledby="about-h">
+        <h2 id="about-h">About</h2>
+        <p className="settings-links">
+          <Link to="/help">Help</Link>
+          <Link to="/privacy">Privacy</Link>
+          <span className="muted">Press <kbd>?</kbd> for keyboard shortcuts</span>
+        </p>
+      </section>
     </>
   );
 }

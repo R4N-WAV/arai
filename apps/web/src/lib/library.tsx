@@ -25,8 +25,10 @@ export interface LibraryPrefs {
   pins: string[];
   folders: Folder[];
   recent: RecentPlay[];
+  /** The first-run guide was dismissed. */
+  welcomed: boolean;
 }
-const EMPTY: LibraryPrefs = { pins: [], folders: [], recent: [] };
+const EMPTY: LibraryPrefs = { pins: [], folders: [], recent: [], welcomed: false };
 const CTX = 'account/library-prefs';
 
 function clean(x: unknown): LibraryPrefs {
@@ -42,6 +44,7 @@ function clean(x: unknown): LibraryPrefs {
       .filter((r): r is RecentPlay => !!r && typeof r.trackId === 'string' && typeof r.projectId === 'string')
       .slice(0, 30)
       .map((r) => ({ projectId: r.projectId, trackId: r.trackId, title: String(r.title ?? '').slice(0, 200), at: Number(r.at) || 0 })),
+    welcomed: o.welcomed === true,
   };
 }
 
@@ -53,12 +56,16 @@ interface LibraryState {
   deleteFolder: (id: string) => void;
   setInFolder: (folderId: string, projectId: string, inside: boolean) => void;
   recordPlay: (p: Omit<RecentPlay, 'at'>) => void;
+  dismissWelcome: () => void;
+  /** Preferences have been loaded from the server (avoids flashing the guide). */
+  ready: boolean;
 }
 const Ctx = createContext<LibraryState | null>(null);
 
 export function LibraryProvider({ children }: { children: ReactNode }) {
   const { keys } = useSession();
   const [prefs, setPrefs] = useState<LibraryPrefs>(EMPTY);
+  const [ready, setReady] = useState(false);
   const key = useRef<Uint8Array | null>(null);
   const loaded = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -78,6 +85,7 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
         }
       }
       loaded.current = true;
+      setReady(true);
     })();
     return () => {
       alive = false;
@@ -116,9 +124,11 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
       deleteFolder: (id) => update((p) => ({ ...p, folders: p.folders.filter((f) => f.id !== id) })),
       setInFolder: (fid, pid, inside) =>
         update((p) => ({ ...p, folders: p.folders.map((f) => (f.id !== fid ? f : { ...f, projectIds: inside ? [...new Set([...f.projectIds, pid])] : f.projectIds.filter((x) => x !== pid) })) })),
+      ready,
+      dismissWelcome: () => update((p) => ({ ...p, welcomed: true })),
       recordPlay: (r) => update((p) => ({ ...p, recent: [{ ...r, at: Date.now() }, ...p.recent.filter((x) => x.trackId !== r.trackId)].slice(0, 30) })),
     }),
-    [prefs, update],
+    [prefs, update, ready],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

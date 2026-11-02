@@ -5,8 +5,8 @@ Run before calling a version "released". Every line must be ticked.
 ## Automated (all green)
 - [ ] `npm run typecheck` · `npm run lint` (no errors) · `npm test`
 - [ ] Browser E2E against `wrangler dev`: auth, projects, tracks, profile-import,
-      collab, messages, audio-admin, device-art, a11y (axe: zero serious/critical
-      at 360/768/1280 px)
+      collab, messages, audio-admin, device-art, account, library, versions,
+      playback, push, onboarding, a11y (axe: zero serious/critical at 360/768/1280 px)
 - [ ] Deploy workflow green on the release commit
 
 ## Security (SECURITY.md §7 — covered by)

@@ -6,6 +6,7 @@ import { useUnread } from '../lib/activity';
 import { useRealtime } from '../lib/messages';
 import { useLibrary } from '../lib/library';
 import { setBadge } from '../lib/push';
+import { ShortcutsDialog } from './Shortcuts';
 import { HomeLink } from './Logo';
 import { PlayerBar } from './PlayerBar';
 import { usePlayer } from '../lib/player';
@@ -159,6 +160,7 @@ export function AppShellWith({ children }: { children: ReactNode }) {
           <button type="button" className="btn btn-sm" onClick={() => window.location.reload()}>Reload</button>
         </div>
       )}
+      <ShortcutsDialog />
       <PlayerBar />
       <nav className="tabbar" aria-label="Main">{links}</nav>
     </div>

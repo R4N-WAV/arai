@@ -52,6 +52,24 @@ function Invitations() {
   );
 }
 
+/** First-run guide: three things worth knowing, dismissed for good (stored encrypted). */
+function Welcome() {
+  const { prefs, ready, dismissWelcome } = useLibrary();
+  if (!ready || prefs.welcomed) return null;
+  return (
+    <section className="welcome" aria-labelledby="welcome-h">
+      <h2 id="welcome-h" className="section-title">Welcome to அறை</h2>
+      <ol className="welcome-steps">
+        <li><strong>Bring your music in.</strong> Start a project and drop files on it, or <Link to="/import">import a library</Link> from another platform. Versions stack up under each track.</li>
+        <li><strong>Work together.</strong> Invite people from a project’s People panel, leave notes at exact moments, or send a share link to anyone.</li>
+        <li><strong>It stays yours.</strong> Everything private is encrypted on your device before upload. Keep your recovery key safe: it is the only way back if you forget your password. <Link to="/privacy">How privacy works</Link>.</li>
+      </ol>
+      <p className="row-sub">Tip: add Arai to your Home Screen, turn on notifications in <Link to="/settings">Settings</Link>, and press <kbd>?</kbd> for keyboard shortcuts.</p>
+      <button type="button" className="btn btn-sm" onClick={dismissWelcome}>Got it</button>
+    </section>
+  );
+}
+
 export function Library() {
   const { projects, error } = useProjects();
 
@@ -61,6 +79,7 @@ export function Library() {
     return (
       <>
         <h1 className="visually-hidden">Library</h1>
+        <Welcome />
         <Invitations />
         <section className="empty" aria-labelledby="empty-title">
           <h2 id="empty-title">Your space is quiet.</h2>
@@ -151,6 +170,7 @@ function LibraryGrid({ projects, error }: { projects: Project[]; error: string |
         </span>
       </header>
       {error && <Notice kind="error">{error}</Notice>}
+      <Welcome />
       <Invitations />
 
       {recent.length > 0 && !query && (

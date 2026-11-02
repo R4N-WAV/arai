@@ -758,3 +758,19 @@ select option:checked { background-color: #2a2830; color: var(--text); }
 .ab-side { min-width: 52px; min-height: 40px; border: 0; border-radius: 999px; background: transparent; color: var(--muted); font: 600 var(--fs-md, 1rem) var(--font-mono); cursor: pointer; }
 .ab-side.on { background: var(--text); color: var(--void); }
 .update-banner { position: fixed; left: 50%; top: max(var(--s-3), env(safe-area-inset-top)); transform: translateX(-50%); z-index: 50; display: flex; gap: var(--s-3); align-items: center; padding: var(--s-2) var(--s-2) var(--s-2) var(--s-4); border-radius: 999px; background: #17161b; border: 1px solid var(--line-strong); color: var(--text); font-size: var(--fs-sm); box-shadow: 0 12px 30px -12px rgb(0 0 0 / 0.8); }
+
+/* ---------- help, privacy, onboarding (phase 14) ---------- */
+.info-page { max-width: 760px; }
+.info-page h2 { font: 600 var(--fs-lg)/1.25 var(--font-display); margin-bottom: var(--s-3); }
+.info-page p, .info-list li, .faq dd { color: var(--text-2); line-height: 1.6; }
+.info-list { padding-left: 1.2em; display: grid; gap: var(--s-2); }
+.faq dt { font-weight: 600; margin-top: var(--s-4); }
+.faq dd { margin: var(--s-1) 0 0; }
+kbd { display: inline-block; min-width: 1.8em; padding: 1px 6px; margin-right: 4px; border: 1px solid var(--line-strong); border-bottom-width: 2px; border-radius: 5px; font: 500 var(--fs-xs)/1.5 var(--font-mono); text-align: center; color: var(--text); }
+.shortcut-list { display: grid; gap: var(--s-2); margin: 0; }
+.shortcut-list > div { display: grid; grid-template-columns: minmax(140px, auto) 1fr; gap: var(--s-4); align-items: center; padding: var(--s-2) 0; border-top: 1px solid var(--line); }
+.shortcut-list dd { margin: 0; color: var(--text-2); }
+.welcome { padding: var(--s-5) 0 var(--s-6); margin-bottom: var(--s-6); border-bottom: 1px solid var(--line); max-width: 760px; }
+.welcome-steps { padding-left: 1.2em; display: grid; gap: var(--s-3); margin: 0 0 var(--s-4); color: var(--text-2); line-height: 1.55; }
+.welcome-steps strong { color: var(--text); }
+.settings-links { display: flex; gap: var(--s-4); flex-wrap: wrap; }

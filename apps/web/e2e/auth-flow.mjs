@@ -47,7 +47,7 @@ step('account created and signed in');
 await page.getByRole('link', { name: 'Settings' }).first().click();
 await page.getByRole('heading', { name: 'Two-factor authentication' }).waitFor();
 for (const name of ['Send verification email', 'Turn on']) {
-  for (const b of await page.getByRole('button', { name }).all()) if (!(await b.isDisabled())) throw new Error(`${name} should be disabled`);
+  for (const b of await page.getByRole('button', { name, exact: true }).all()) if (!(await b.isDisabled())) throw new Error(`${name} should be disabled`);
 }
 if ((await page.getByText('Not available yet').count()) < 3) throw new Error('expected greyed-out provider features');
 step('settings: email verification + email/SMS 2FA greyed out');

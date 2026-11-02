@@ -27,6 +27,8 @@ import { SignIn } from './pages/SignIn';
 import { Unlock } from './pages/Unlock';
 import { startStreamingWorker } from './lib/stream';
 import './styles/app.css';
+const PrivacyPage = lazy(() => import('./pages/Info').then((m) => ({ default: m.PrivacyPage })));
+const HelpPage = lazy(() => import('./pages/Info').then((m) => ({ default: m.HelpPage })));
 const Recover = lazy(() => import('./pages/Recover').then((m) => ({ default: m.Recover })));
 const Settings = lazy(() => import('./pages/Settings').then((m) => ({ default: m.Settings })));
 const ImportPage = lazy(() => import('./pages/Import').then((m) => ({ default: m.ImportPage })));
@@ -113,6 +115,8 @@ createRoot(document.getElementById('root')!).render(
           </Route>
           <Route path="/u/:username" element={<ProfileRoute />} />
           <Route path="/s/:id" element={<SharePage />} />
+          <Route path="/privacy" element={<PrivacyPage />} />
+          <Route path="/help" element={<HelpPage />} />
           <Route path="/listen/:projectId" element={<ListenPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

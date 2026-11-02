@@ -74,3 +74,8 @@
 ## Session 13 — 2026-11-02
 - Owner feedback: stay signed in until sign-out; artwork upload now; unreadable native dropdown on desktop; grain looked thrown on top; continue through phase 14 (spec defines 0–8; phases 9–14 defined from the backlog in PROJECT_STATUS).
 - Remembered devices (migration 0009 `sessions.device_secret`, double-wrapped keys, 400-day sessions), artwork (encrypted, public copy, share payload, import uses cover art, colour from the dominant hue), dropdown colours, grain only inside colour (overlay 0.28) and no cover noise. `admin.mjs` accepts "@name".
+- Phase 8: oxlint (typescript-eslint lacks TS 7 support), code splitting (548 → 318 kB), axe audit (fixed cover-title contrast), RUNBOOK + RELEASE_CHECKLIST.
+- Phase 9: change password/username, data export, download original, account deletion. Phase 10: encrypted prefs (pins, folders, recents), library search incl. track titles, sort.
+- Phase 11: A/B compare (Web Audio, loudness-matched), AIFF→WAV. Phase 12: dual-element gapless handoff (~+36 ms measured), AudioWorklet pitch shift.
+- Phase 13: Web Push with empty pushes (VAPID), badge, update banner. Phase 14: welcome guide, shortcut sheet, /privacy, /help.
+- Mistakes caught and fixed: a pushed lint error (unused state) and a pushed typecheck error (node:crypto in the API vitest config), both made the deploy job refuse that commit; fixed immediately. CompareDialog needed AudioContext.resume(); handoff readiness used readyState instead of an event streams may not fire.

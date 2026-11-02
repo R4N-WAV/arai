@@ -46,6 +46,9 @@ export function SignIn() {
       <p className="auth-alt" style={{ marginTop: 0 }}>
         New to Arai? <Link to="/register">Create an account</Link>
       </p>
+      <p className="auth-alt" style={{ marginTop: 0 }}>
+        <Link to="/help">Help</Link> · <Link to="/privacy">Privacy</Link>
+      </p>
     </AuthLayout>
   );
 }

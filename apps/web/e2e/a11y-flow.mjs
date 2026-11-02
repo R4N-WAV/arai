@@ -44,6 +44,8 @@ async function each(name, go) {
 
 await each('sign in', async () => { await page.goto(`${BASE}/signin`); await page.getByRole('heading', { name: /Sign in/ }).first().waitFor(); });
 await each('register', async () => { await page.goto(`${BASE}/register`); await page.getByLabel('Username').waitFor(); });
+await each('privacy', async () => { await page.goto(`${BASE}/privacy`); await page.getByRole('heading', { name: 'Privacy' }).waitFor(); });
+await each('help', async () => { await page.goto(`${BASE}/help`); await page.getByRole('heading', { name: 'Help' }).waitFor(); });
 
 await page.goto(`${BASE}/register`);
 await page.getByLabel('Username').fill(user);

@@ -1,9 +1,11 @@
 import { cloudflareTest, readD1Migrations } from '@cloudflare/vitest-plugin';
-import { generateKeyPairSync } from 'node:crypto';
 import { defineConfig } from 'vitest/config';
 
-// A throwaway Web Push (VAPID) key for tests.
-const vapid = JSON.stringify(generateKeyPairSync('ec', { namedCurve: 'P-256' }).privateKey.export({ format: 'jwk' }));
+// A throwaway Web Push (VAPID) key for tests (WebCrypto: no Node typings needed).
+async function testVapid(): Promise<string> {
+  const pair = (await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify'])) as CryptoKeyPair;
+  return JSON.stringify(await crypto.subtle.exportKey('jwk', pair.privateKey));
+}
 
 export default defineConfig({
   plugins: [
@@ -16,7 +18,7 @@ export default defineConfig({
           AUTH_PEPPER: 'test-pepper',
           KDF_SALT_SECRET: 'test-kdf-salt-secret',
           IP_HMAC_SECRET: 'test-ip-secret',
-          VAPID_PRIVATE_JWK: vapid,
+          VAPID_PRIVATE_JWK: await testVapid(),
         },
       },
     })),
