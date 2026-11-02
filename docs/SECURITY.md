@@ -236,6 +236,8 @@ already downloaded, and still holds the key versions they were granted
 (they lose server access to ciphertext and never get the new key). Play
 counts are daily per-track totals (no listener ids).
 
+Playback note: once pitch shifting is used, audio is routed through Web Audio for that tab; on iPhone this can stop playback when the screen locks (iOS limitation).
+
 Other limitations: private content is not server-searchable (client-side
 search only); SMS 2FA requires a paid provider; streaming permission implies
 the ability to record.

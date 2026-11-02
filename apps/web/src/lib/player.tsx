@@ -25,6 +25,9 @@ interface PlayerState {
   rate: number;
   /** false = varispeed: pitch follows speed, like a tape machine. */
   pitchLock: boolean;
+  /** Transpose in semitones without changing speed (Web Audio pitch shifter). */
+  pitch: number;
+  setPitch: (semitones: number) => void;
   /** Section loop (A–B), seconds. */
   ab: { a: number | null; b: number | null };
   wave: WaveData | null;
@@ -46,7 +49,15 @@ interface PlayerState {
 const Ctx = createContext<PlayerState | null>(null);
 
 export function PlayerProvider({ children }: { children: ReactNode }) {
-  const audio = useRef<HTMLAudioElement>(null);
+  // Two elements: the active one plays, the other preloads the next track so
+  // the switch happens without a loading gap ("gapless" handoff).
+  const elA = useRef<HTMLAudioElement>(null);
+  const elB = useRef<HTMLAudioElement>(null);
+  const audio = useRef<HTMLAudioElement | null>(null);
+  const [active, setActive] = useState<0 | 1>(0);
+  const standby = useRef<{ versionId: string; ready: boolean } | null>(null);
+  const handingOff = useRef(false);
+  const rafRef = useRef(0);
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [index, setIndex] = useState(0);
   const [status, setStatus] = useState<PlayerState['status']>('idle');
@@ -57,6 +68,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const [loop, setLoop] = useState(false);
   const [rate, setRateState] = useState(1);
   const [pitchLock, setPitchLockState] = useState(true);
+  const [pitch, setPitchState] = useState(0);
+  const graph = useRef<{ ctx: AudioContext; node: AudioWorkletNode } | null>(null);
   const [ab, setAb] = useState<{ a: number | null; b: number | null }>({ a: null, b: null });
   const counted = useRef<string | null>(null);
   const abRef = useRef(ab);
@@ -66,9 +79,12 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const prefetched = useRef(new Set<string>());
   const item = queue[index] ?? null;
 
+  audio.current ??= elA.current;
   const load = useCallback(async (q: QueueItem[], i: number) => {
     const it = q[i];
+    audio.current ??= elA.current;
     const el = audio.current;
+    standby.current = null;
     if (!it || !el) return;
     const token = ++loadToken.current;
     setStatus('loading');
@@ -121,10 +137,72 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     void load(queue, i);
   }, [queue, load]);
 
+  /** Loads the next item into the idle element, ready to start instantly. */
+  const prepareNext = useCallback(async (it: QueueItem) => {
+    const idle = (audio.current === elA.current ? elB : elA).current;
+    if (!idle || standby.current?.versionId === it.version.id) return;
+    standby.current = { versionId: it.version.id, ready: false };
+    try {
+      const aiff = it.version.meta?.format === 'aiff' && !browserPlaysAiff();
+      const url = (aiff ? null : await streamUrl(it.project, it.version).catch(() => null)) ?? (await audioUrl(it.project, it.version));
+      if (standby.current?.versionId !== it.version.id) return;
+      idle.src = url;
+      idle.preload = 'auto';
+      const startAt = it.track.trims?.[it.version.id]?.start ?? 0;
+      idle.addEventListener('loadedmetadata', () => (idle.currentTime = startAt), { once: true });
+      idle.addEventListener('canplaythrough', () => standby.current?.versionId === it.version.id && (standby.current.ready = true), { once: true });
+      idle.load();
+    } catch {
+      standby.current = null;
+    }
+  }, []);
+
+  /** Starts the preloaded next track and retires the current one. */
+  const handoff = useCallback((nextIndex: number) => {
+    const from = audio.current;
+    const to = (from === elA.current ? elB : elA).current;
+    const it = queue[nextIndex];
+    // HAVE_FUTURE_DATA: enough is buffered to start immediately.
+    if (!from || !to || !it || standby.current?.versionId !== it.version.id || to.readyState < 3) return false;
+    handingOff.current = true;
+    to.volume = from.volume;
+    to.preservesPitch = from.preservesPitch;
+    to.playbackRate = from.playbackRate;
+    to.loop = false;
+    void to.play();
+    from.pause();
+    from.removeAttribute('src');
+    from.load(); // release the old stream
+    audio.current = to;
+    standby.current = null;
+    loadToken.current++;
+    setActive(to === elA.current ? 0 : 1);
+    setIndex(nextIndex);
+    setAb({ a: null, b: null });
+    setTime(to.currentTime);
+    setDuration(it.version.meta?.duration ?? 0);
+    void decodeWave(it.version.meta).then(setWave);
+    setTimeout(() => (handingOff.current = false), 50);
+    return true;
+  }, [queue]);
+
   useEffect(() => {
     const el = audio.current;
     if (!el) return;
     const on = (name: string, fn: () => void) => (el.addEventListener(name, fn), () => el.removeEventListener(name, fn));
+    // Watch the last moments closely: timeupdate (~4/s) is too coarse for a seamless switch.
+    const endOf = () => queue[index]?.track.trims?.[queue[index]!.version.id]?.end ?? el.duration;
+    const watchEnd = () => {
+      cancelAnimationFrame(rafRef.current);
+      const step = () => {
+        if (el.paused || el.loop || abRef.current.b !== null) return;
+        const left = endOf() - el.currentTime;
+        // Element start latency is a few ms; leave ~25 ms so the next one begins on time.
+        if (left <= 0.025 * Math.max(1, el.playbackRate) && index < queue.length - 1 && handoff(index + 1)) return;
+        if (left > 0) rafRef.current = requestAnimationFrame(step);
+      };
+      rafRef.current = requestAnimationFrame(step);
+    };
     const offs = [
       // 'playing' fires only when sound actually starts; 'waiting' when it stalls.
       on('playing', () => {
@@ -137,7 +215,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         }
       }),
       on('waiting', () => setStatus('loading')),
-      on('pause', () => setStatus((s) => (s === 'loading' ? s : 'paused'))),
+      on('pause', () => !handingOff.current && setStatus((s) => (s === 'loading' ? s : 'paused'))),
       on('timeupdate', () => {
         setTime(el.currentTime);
         const cur = queue[index];
@@ -162,16 +240,21 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
           prefetched.current.add(nextItem.version.id);
           void prefetch(nextItem.project, nextItem.version);
         }
+        // Preload the next track into the idle element, then watch the final second.
+        const left = endOf() - el.currentTime;
+        if (nextItem && !el.loop && left < 12) void prepareNext(nextItem);
+        if (nextItem && left < 1.2) watchEnd();
       }),
       on('loadedmetadata', () => Number.isFinite(el.duration) && setDuration(el.duration)),
       on('ended', () => {
         if (index < queue.length - 1) go(index + 1);
         else setStatus('paused');
       }),
-      on('error', () => setStatus('error')),
+      on('error', () => !handingOff.current && el.getAttribute('src') && setStatus('error')),
     ];
     return () => offs.forEach((f) => f());
-  }, [index, queue, go]);
+    // Re-bind when the active element changes after a handoff.
+  }, [index, queue, go, active, handoff, prepareNext]);
 
   // Operating-system media keys, lock screen and headphone buttons.
   useEffect(() => {
@@ -295,6 +378,13 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     },
     clear: () => {
       loadToken.current++;
+      standby.current = null;
+      for (const e of [elA.current, elB.current]) {
+        if (e && e !== audio.current) {
+          e.pause();
+          e.removeAttribute('src');
+        }
+      }
       audio.current?.pause();
       audio.current?.removeAttribute('src');
       setQueue([]);
@@ -308,6 +398,26 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         audio.current.playbackRate = r;
       }
     },
+    pitch,
+    setPitch: (semi) => {
+      const st = Math.max(-12, Math.min(12, Math.round(semi)));
+      setPitchState(st);
+      void (async () => {
+        // Route both elements through the shifter the first time it is used.
+        if (!graph.current && st !== 0) {
+          const ctx = new AudioContext();
+          await ctx.audioWorklet.addModule('/pitch-worklet.js');
+          const node = new AudioWorkletNode(ctx, 'arai-pitch-shifter', { outputChannelCount: [2] });
+          node.connect(ctx.destination);
+          for (const e of [elA.current, elB.current]) if (e) ctx.createMediaElementSource(e).connect(node);
+          graph.current = { ctx, node };
+        }
+        if (graph.current) {
+          if (graph.current.ctx.state === 'suspended') await graph.current.ctx.resume();
+          graph.current.node.parameters.get('ratio')!.value = 2 ** (st / 12);
+        }
+      })().catch(() => setPitchState(0));
+    },
     setPitchLock: (v) => {
       setPitchLockState(v);
       if (audio.current) audio.current.preservesPitch = v;
@@ -316,12 +426,13 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       const t = audio.current?.currentTime ?? 0;
       setAb((x) => (x.a === null ? { a: t, b: null } : x.b === null ? (t > x.a + 0.25 ? { a: x.a, b: t } : { a: null, b: null }) : { a: null, b: null }));
     },
-  }), [queue, index, item, status, loadProgress, time, duration, volume, loop, rate, pitchLock, ab, wave, playQueue, go]);
+  }), [queue, index, item, status, loadProgress, time, duration, volume, loop, rate, pitchLock, pitch, ab, wave, playQueue, go]);
 
   return (
     <Ctx.Provider value={value}>
       {children}
-      <audio ref={audio} preload="auto" hidden />
+      <audio ref={elA} preload="auto" hidden />
+      <audio ref={elB} preload="auto" hidden />
     </Ctx.Provider>
   );
 }

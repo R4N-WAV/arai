@@ -65,6 +65,12 @@ export function PlayerBar() {
         <button type="button" className="btn btn-ghost btn-sm varispeed" aria-pressed={!p.pitchLock} onClick={() => p.setPitchLock(!p.pitchLock)} title="When on, changing speed also changes pitch, like tape">
           Varispeed
         </button>
+        <label className="rate" title="Transpose without changing speed">
+          <span className="visually-hidden">Pitch (semitones)</span>
+          <select value={p.pitch} onChange={(e) => p.setPitch(Number(e.target.value))} aria-label="Pitch in semitones">
+            {Array.from({ length: 25 }, (_, i) => i - 12).map((n) => <option key={n} value={n}>{n === 0 ? '±0 st' : `${n > 0 ? '+' : ''}${n} st`}</option>)}
+          </select>
+        </label>
         <label className="volume">
           <span className="visually-hidden">Volume</span>
           <input type="range" min={0} max={1} step={0.01} value={p.volume} onChange={(e) => p.setVolume(Number(e.target.value))} />

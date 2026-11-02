@@ -78,11 +78,11 @@ Last updated: 2026-11-02 (session 12). Tests: 106 passing (crypto 20, shared 4, 
 - [!] GIFs — greyed out until a GIF provider key is configured (`FEATURE_GIFS`, `GIF_API_KEY`)
 
 ## Phase 6 — Advanced audio
-- [x] Varispeed (pitch follows speed) alongside pitch-preserving speed · [ ] independent pitch shift (needs a DSP worklet)
+- [x] Varispeed (pitch follows speed) alongside pitch-preserving speed · [x] independent pitch shift (Phase 12)
 - [x] Non-destructive trim per version (encrypted in track metadata) · [x] A–B section loop
 - [x] Offline copies (ciphertext in Cache Storage; service worker falls back to it) with management in Settings
 - [x] Play counts (daily per-track totals, member vs link; shown in insights) (migration 0008)
-- [ ] Gapless (sample-accurate) playback · [ ] A/B version compare
+- [x] Near-gapless handoff (Phase 12) · [x] A/B version compare (Phase 11)
 
 ## Phase 7 — Administration
 - [x] CLI bootstrap `scripts/admin.mjs` (grant-owner, grant-moderator, revoke, list, verify-audit)
@@ -108,7 +108,7 @@ The owner asked to continue to phase 14. These phases take the remaining backlog
 - [x] A/B compare (both versions in sync through Web Audio, instant switch with A/B keys, loudness-matched via BS.1770) · [x] AIFF/AIFC → WAV in the browser for analysis and playback outside Safari (unit tests + versions E2E)
 
 ### Phase 12 — Playback engine
-- [ ] Gapless playback between tracks · [ ] independent pitch shift (semitones, speed unchanged)
+- [x] Gapless handoff: the next track preloads in a second element and takes over within a few tens of ms of the end (measured in E2E; not sample-accurate) · [x] independent pitch shift ±12 semitones via an AudioWorklet (speed unchanged; Web Audio routing starts only once pitch is used)
 
 ### Phase 13 — Notifications & installed app
 - [ ] Web Push (VAPID) for messages, invitations and comments, opt-in per device · [ ] app icon badge · [ ] "new version available" prompt
