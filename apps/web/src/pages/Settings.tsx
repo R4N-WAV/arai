@@ -209,7 +209,7 @@ function BlockedSection() {
 function AdminLink() {
   const [role, setRole] = useState<string | null>(null);
   useEffect(() => {
-    api<{ role: string }>('GET', '/admin/me').then((r) => setRole(r.role)).catch(() => undefined);
+    api<{ role: string | null }>('GET', '/account/platform-role').then((r) => setRole(r.role)).catch(() => undefined);
   }, []);
   if (!role) return null;
   return (

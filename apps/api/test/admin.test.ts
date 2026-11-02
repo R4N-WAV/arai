@@ -13,6 +13,7 @@ describe('administration', () => {
   it('is invisible to ordinary users', async () => {
     const { c } = await registered('ad_plain');
     for (const p of ['/admin/me', '/admin/stats', '/admin/reports', '/admin/audit']) expect((await c.call('GET', p)).status).toBe(404);
+    expect((await c.call('GET', '/account/platform-role')).json).toEqual({ role: null });
   });
 
   it('moderators handle reports with public data only; actions are audited; only the owner bans', async () => {

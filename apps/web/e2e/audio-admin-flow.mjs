@@ -120,6 +120,9 @@ await u.getByText(/The project is public now/).waitFor();
 const projectId = new URL(u.url()).pathname.split('/').pop();
 const o = await open('owner');
 await register(o, OWNER);
+// Local test database: replace any owner left from an earlier run (one owner at a time).
+const existing = /owner\s+@(\S+)/.exec(execFileSync('node', [join(root, 'scripts', 'admin.mjs'), 'list', '--local'], { encoding: 'utf8' }))?.[1];
+if (existing) execFileSync('node', [join(root, 'scripts', 'admin.mjs'), 'revoke', existing, '--local'], { stdio: 'pipe' });
 execFileSync('node', [join(root, 'scripts', 'admin.mjs'), 'grant-owner', OWNER, '--local'], { stdio: 'pipe' });
 await o.evaluate(([pid]) => fetch('/api/reports', { method: 'POST', headers: { 'X-Arai-CSRF': '1', 'Content-Type': 'application/json' }, body: JSON.stringify({ targetType: 'project', targetId: pid, reason: 'copyright', details: 'not theirs' }) }), [projectId]);
 await o.goto(`${BASE}/settings`);
@@ -133,8 +136,8 @@ await report.getByRole('button', { name: 'Hide project' }).click();
 await o.getByText('Done. The action is in the audit log.').waitFor();
 await o.locator('.row', { hasText: 'moderation.hide_project' }).first().waitFor();
 if (shots) await o.screenshot({ path: `${shots}/a1-admin.png`, fullPage: true });
-const listed = await o.evaluate(() => fetch('/api/discover?q=drift').then((r) => r.json()).then((j) => j.projects.length));
-if (listed !== 0) throw new Error('hidden project still discoverable');
+const listed = await o.evaluate((pid) => fetch('/api/discover?q=drift').then((r) => r.json()).then((j) => j.projects.some((p) => p.id === pid)), projectId);
+if (listed) throw new Error('hidden project still discoverable');
 step('owner granted from the CLI; report reviewed; project hidden from discovery; audit chain intact');
 
 await browser.close();

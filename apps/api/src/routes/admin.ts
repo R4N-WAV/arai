@@ -30,6 +30,12 @@ const notFound = (c: Context) => c.json({ error: 'not_found' }, 404);
 
 admin.get('/admin/me', (c) => c.json({ role: c.get('platformRole') }));
 
+/** Your own platform role (or null): lets the app show the dashboard link without probing admin routes. */
+admin.get('/account/platform-role', requireUser as unknown as MiddlewareHandler<AdminBindings>, async (c) => {
+  const r = await c.env.DB.prepare('SELECT role FROM platform_roles WHERE user_id = ?').bind(c.get('session').user_id).first<{ role: string }>();
+  return c.json({ role: r?.role ?? null });
+});
+
 admin.get('/admin/stats', async (c) => {
   const day = 86400_000;
   const now = Date.now();
