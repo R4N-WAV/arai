@@ -709,3 +709,10 @@ textarea.input, .comment-form textarea { min-height: 0; padding: var(--s-3) var(
   .thread-back { display: inline-flex; padding: 0 var(--s-2); }
   .msg { max-width: 88%; }
 }
+.ab-btn span { font: 600 11px/1 var(--font-mono); }
+.varispeed[aria-pressed="true"] { color: var(--void); background: var(--text); }
+.trim-wave { position: relative; }
+.trim-shade { position: absolute; top: 0; bottom: var(--s-5); background: rgb(8 8 10 / 0.7); pointer-events: none; }
+input[type="range"] { accent-color: var(--text); width: 100%; }
+.admin-stats { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+.report-text { margin: var(--s-2) 0 0; color: var(--text-2); overflow-wrap: anywhere; }

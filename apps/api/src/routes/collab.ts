@@ -30,6 +30,7 @@ import { clientIp, requireUser, type AuthedBindings } from '../lib/session.js';
 import { parseBody } from '../lib/validate.js';
 import { ACCEPTED, PROJECT_SELECT, projectDtos, type ProjectRow } from './projects.js';
 import { notify } from './social.js';
+import { countPlay } from './tracks.js';
 
 const collab = new Hono<AuthedBindings>();
 for (const p of ['/users/lookup/*', '/projects/:id/members', '/projects/:id/members/*', '/projects/:id/rotate', '/invites', '/invites/*', '/versions/*', '/comments/*', '/projects/:id/shares', '/projects/:id/shares/*']) {
@@ -409,6 +410,7 @@ collab.post('/projects/:id/shares', async (c) => {
   const body = await parseBody(c, createShareRequest);
   if (!body) return bad(c);
   const me = c.get('session').user_id;
+  if (c.get('session').status === 'restricted') return c.json({ error: 'account_restricted' }, 403);
   if (!(await rateLimit(c.env.DB, `share:${me}`, 60, 3600_000))) return c.json({ error: 'too_many_attempts' }, 429);
   const p = await c.env.DB.prepare('SELECT key_version, visibility FROM projects WHERE id = ?').bind(id).first<{ key_version: number; visibility: string }>();
   if (body.keyVersion !== p!.key_version) return c.json({ error: 'stale_key' }, 409);
@@ -569,6 +571,17 @@ collab.post('/share/:linkId/comments', async (c) => {
   }
   const row = await c.env.DB.prepare(`${COMMENTS} WHERE c.id = ?`).bind(body.id).first<CommentRow>();
   return c.json({ comment: commentDto(row!) }, 201);
+});
+
+collab.post('/share/:linkId/play', async (c) => {
+  const body = await parseBody(c, guestCommentRequest.pick({ token: true, versionId: true }));
+  if (!body) return bad(c);
+  const link = await liveLink(c.env.DB, c.req.param('linkId'));
+  if (!link || !(await tokenOk(link, body.token))) return notFound(c);
+  const v = await c.env.DB.prepare('SELECT v.track_id FROM share_link_files s JOIN track_versions v ON v.id = s.version_id WHERE s.link_id = ? AND s.version_id = ?').bind(link.id, body.versionId).first<{ track_id: string }>();
+  if (!v) return bad(c);
+  if (await rateLimit(c.env.DB, `share-play:${await ipKey(c)}:${body.versionId}`, 1, 30_000)) await countPlay(c.env.DB, v.track_id, 'link');
+  return c.json({ ok: true });
 });
 
 /** Public listening: the link of a public project, secret included (public by the owner's choice). */

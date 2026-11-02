@@ -294,4 +294,37 @@ tracks.delete('/tracks/:trackId', async (c) => {
   return c.json({ ok: true });
 });
 
+// ---- listening stats (daily counts only) -------------------------------------
+
+export async function countPlay(db: D1Database, trackId: string, source: 'member' | 'link') {
+  const day = Math.floor(Date.now() / 86400_000);
+  await db.prepare('INSERT INTO track_plays (track_id, day, source, count) VALUES (?, ?, ?, 1) ON CONFLICT(track_id, day, source) DO UPDATE SET count = count + 1').bind(trackId, day, source).run();
+}
+
+tracks.post('/tracks/:trackId/play', async (c) => {
+  const trackId = c.req.param('trackId');
+  const projectId = await trackProject(c.env.DB, trackId);
+  if (!projectId) return notFound(c);
+  const g = await gate(c, projectId, 'listener');
+  if (!g.ok) return g.res;
+  // One count per person per track every 30 s keeps replays from inflating numbers.
+  const { rateLimit } = await import('../lib/ratelimit.js');
+  if (await rateLimit(c.env.DB, `play:${c.get('session').user_id}:${trackId}`, 1, 30_000)) await countPlay(c.env.DB, trackId, 'member');
+  return c.json({ ok: true });
+});
+
+tracks.get('/projects/:id/plays', async (c) => {
+  const projectId = c.req.param('id');
+  const g = await gate(c, projectId, 'listener');
+  if (!g.ok) return g.res;
+  const since = Math.floor(Date.now() / 86400_000) - 30;
+  const { results } = await c.env.DB.prepare(
+    `SELECT p.track_id, SUM(p.count) AS total, SUM(CASE WHEN p.day > ? THEN p.count ELSE 0 END) AS recent, SUM(CASE WHEN p.source = 'link' THEN p.count ELSE 0 END) AS via_links
+       FROM track_plays p JOIN tracks t ON t.id = p.track_id AND t.project_id = ? AND t.deleted_at IS NULL GROUP BY p.track_id`,
+  )
+    .bind(since, projectId)
+    .all<{ track_id: string; total: number; recent: number; via_links: number }>();
+  return c.json({ plays: Object.fromEntries(results.map((r) => [r.track_id, { total: r.total, last30: r.recent, viaLinks: r.via_links }])) });
+});
+
 export default tracks;

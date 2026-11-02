@@ -62,3 +62,11 @@
 - Owner: the player bar covered the end of the library (one project could not be fully read at the bottom). Cause: hard-coded bottom padding that ignored the home-indicator inset and the real player height.
 - Fix: `AppShell` measures the fixed bottom chrome (player + tab bar) with a ResizeObserver and sets `--chrome-bottom`; page content and mobile menu sheets are offset by it. Phone player made more compact (smaller thumb/buttons, 26 px waveform).
 - E2E (`tracks-flow`): scrolls to the bottom of the project page and the library at 375 and 1280 px and asserts every content element ends above the player/tab bar.
+
+## Session 12 — 2026-11-02
+- Owner: phases 3–7 automatically.
+- Phase 3: keyring + key versions, invitations, roles, removal → rotation, encrypted time-coded comments, share links (fragment secret, password, expiry, guest comments), public listening (migration 0005).
+- Phase 4: follows, friends, blocks, reports, notifications/Activity, FTS5 discovery (migration 0006).
+- Phase 5: E2EE DMs/groups/project chats, per-user realtime hub, attachments, reactions, edits/deletes, read receipts, typing, message requests; GIFs greyed out (migration 0007).
+- Phase 6: varispeed, trim, A–B loop, offline copies, play counts (migration 0008). Phase 7: admin CLI, dashboard, moderation actions, restricted/suspended enforcement.
+- Bugs found by E2E and fixed: "a editor" grammar; People/Share dialogs reset on project refresh; message menus remounted by read receipts (thread reloaded on every conversation refresh); WebSocket response headers immutable under the security-header middleware; typing indicator only fired on key presses.

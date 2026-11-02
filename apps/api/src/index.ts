@@ -10,6 +10,7 @@ import profiles from './routes/profiles.js';
 import collab from './routes/collab.js';
 import social from './routes/social.js';
 import messages from './routes/messages.js';
+import admin from './routes/admin.js';
 export { FileStore } from './filestore.js';
 export { UserHub } from './hub.js';
 
@@ -41,6 +42,7 @@ app.route('/api', profiles);
 app.route('/api', collab);
 app.route('/api', social);
 app.route('/api', messages);
+app.route('/api', admin);
 
 app.notFound((c) => c.json({ error: 'not_found' }, 404));
 

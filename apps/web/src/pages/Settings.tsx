@@ -2,6 +2,9 @@ import { useCallback, useEffect, useState } from 'react';
 import { EMAIL_REASON, Notice, SMS_REASON, Unavailable } from '../components/Unavailable';
 import { api, errorMessage } from '../lib/api';
 import { useSession } from '../lib/session';
+import type { PersonDto } from '@arai/shared';
+import { Link } from 'react-router';
+import { clearOffline, offlineFiles, offlineSupported, removeOffline } from '../lib/offline';
 
 interface SessionInfo { id: string; createdAt: number; lastSeenAt: number; device: string | null; current: boolean }
 interface LoginEvent { at: number; success: boolean; device: string | null; newDevice: boolean }
@@ -142,6 +145,78 @@ export function Settings() {
           </ul>
         )}
       </section>
+
+      <OfflineSection />
+      <BlockedSection />
+      <AdminLink />
     </>
+  );
+}
+
+function OfflineSection() {
+  const [files, setFiles] = useState(() => offlineFiles());
+  if (!offlineSupported()) return null;
+  const entries = Object.entries(files);
+  const total = entries.reduce((n, [, f]) => n + f.bytes, 0);
+  return (
+    <section className="section" aria-labelledby="off-h">
+      <h2 id="off-h">Offline copies</h2>
+      <p className="section-lede">Tracks you keep offline are stored encrypted in this browser and play without a connection while Arai is unlocked.</p>
+      {entries.length === 0 ? (
+        <p className="muted">None yet. Choose “Keep offline” in a track’s menu.</p>
+      ) : (
+        <>
+          <ul className="list">
+            {entries.map(([id, f]) => (
+              <li key={id} className="row">
+                <div className="row-main">
+                  <div className="row-title">{f.name}</div>
+                  <p className="row-sub">{(f.bytes / 1048576).toFixed(1)} MB · saved {new Date(f.at).toLocaleDateString()}</p>
+                </div>
+                <button type="button" className="btn btn-ghost btn-sm" onClick={() => void removeOffline(id).then(() => setFiles(offlineFiles()))}>Remove<span className="visually-hidden"> {f.name}</span></button>
+              </li>
+            ))}
+          </ul>
+          <p className="form-actions" style={{ marginTop: 'var(--s-4)' }}>
+            <button type="button" className="btn btn-sm" onClick={() => void clearOffline().then(() => setFiles(offlineFiles()))}>Remove all ({(total / 1048576).toFixed(1)} MB)</button>
+          </p>
+        </>
+      )}
+    </section>
+  );
+}
+
+function BlockedSection() {
+  const [people, setPeople] = useState<PersonDto[] | null>(null);
+  const load = useCallback(() => api<{ people: PersonDto[] }>('GET', '/social/me/blocked').then((r) => setPeople(r.people)).catch(() => setPeople([])), []);
+  useEffect(() => void load(), [load]);
+  if (!people || people.length === 0) return null;
+  return (
+    <section className="section" aria-labelledby="blk-h">
+      <h2 id="blk-h">Blocked</h2>
+      <ul className="list">
+        {people.map((p) => (
+          <li key={p.id} className="row">
+            <div className="row-main"><div className="row-title">@{p.username}</div></div>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => void api('DELETE', `/social/${p.username}/block`).then(load)}>Unblock<span className="visually-hidden"> @{p.username}</span></button>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function AdminLink() {
+  const [role, setRole] = useState<string | null>(null);
+  useEffect(() => {
+    api<{ role: string }>('GET', '/admin/me').then((r) => setRole(r.role)).catch(() => undefined);
+  }, []);
+  if (!role) return null;
+  return (
+    <section className="section" aria-labelledby="adm-h">
+      <h2 id="adm-h">Administration</h2>
+      <p className="section-lede">You are a platform {role}.</p>
+      <Link to="/admin" className="btn btn-sm">Open the dashboard</Link>
+    </section>
   );
 }

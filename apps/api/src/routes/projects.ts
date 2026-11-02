@@ -138,6 +138,8 @@ projects.patch('/projects/:id', async (c) => {
     const any = await requireProjectRole(c.env.DB, id, userId, 'listener');
     return any ? c.json({ error: 'forbidden' }, 403) : c.json(notFound, 404);
   }
+  // Restricted accounts keep their private work but cannot publish.
+  if (body.visibility === 'public' && c.get('session').status === 'restricted') return c.json({ error: 'account_restricted' }, 403);
   const current = await c.env.DB.prepare('SELECT visibility FROM projects WHERE id = ?').bind(id).first<{ visibility: string }>();
   const nextVis = body.visibility ?? current!.visibility;
   if (body.visibility === undefined && body.publicMeta !== undefined && (current!.visibility === 'public') !== (body.publicMeta !== null)) {

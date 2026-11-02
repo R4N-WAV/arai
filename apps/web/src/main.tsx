@@ -1,6 +1,7 @@
 import { StrictMode, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Discover } from './pages/Discover';
+import { AdminPage } from './pages/Admin';
 import { Messages } from './pages/Messages';
 import { RealtimeProvider } from './lib/messages';
 import { Activity } from './pages/Activity';
@@ -89,6 +90,7 @@ createRoot(document.getElementById('root')!).render(
             <Route path="projects/:id" element={<ProjectPage />} />
             <Route path="discover" element={<Discover />} />
             <Route path="activity" element={<Activity />} />
+            <Route path="admin" element={<AdminPage />} />
             <Route path="messages" element={<Messages />} />
             <Route path="messages/:id" element={<Messages />} />
             <Route path="settings" element={<Settings />} />

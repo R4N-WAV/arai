@@ -66,6 +66,7 @@ function SharedPlayer({ s }: { s: OpenedShare }) {
       el.src = url;
       if (startAt > 0) el.addEventListener('loadedmetadata', () => (el.currentTime = startAt), { once: true });
       await el.play();
+      void api('POST', `/share/${s.linkId}/play`, { token: s.token, versionId: t.versionId }).catch(() => undefined);
     } catch {
       setStatus('error');
     }

@@ -56,6 +56,21 @@ self.addEventListener('fetch', (e: FetchEvent) => {
   }
 });
 
+/** Network first; the offline copy (ciphertext in Cache Storage) when the network fails. */
+async function memberChunk(fileId: string, i: number): Promise<Response> {
+  const url = `/api/files/${fileId}/chunks/${i}`;
+  try {
+    const res = await fetch(url, { credentials: 'same-origin' });
+    if (res.ok) return res;
+    const cached = await caches.match(url, { cacheName: 'arai-offline-v1' });
+    return cached ?? res;
+  } catch (e) {
+    const cached = await caches.match(url, { cacheName: 'arai-offline-v1' });
+    if (cached) return cached;
+    throw e;
+  }
+}
+
 function chunk(r: Reg, i: number): Promise<Uint8Array> {
   const id = `${r.fileId}:${i}`;
   let p = plainCache.get(id);
@@ -63,7 +78,7 @@ function chunk(r: Reg, i: number): Promise<Uint8Array> {
     p = (async () => {
       const res = r.base
         ? await fetch(`${r.base}${r.fileId}/chunks/${i}`, { headers: { 'X-Share-Token': r.shareToken ?? '' }, credentials: 'omit' })
-        : await fetch(`/api/files/${r.fileId}/chunks/${i}`, { credentials: 'same-origin' });
+        : await memberChunk(r.fileId, i);
       if (!res.ok) throw new Error(`chunk ${i}: ${res.status}`);
       return decryptChunk(r.key, r.fileId, i, i === r.count - 1, new Uint8Array(await res.arrayBuffer()));
     })();

@@ -10,6 +10,8 @@ import { Modal } from './Modal';
 import { Notice } from './Unavailable';
 import { Waveform } from './Waveform';
 import { VersionComments } from './Comments';
+import { TrimDialog } from './TrimDialog';
+import { isOffline, keepOffline, offlineSupported, removeOffline } from '../lib/offline';
 import { syncShares } from '../lib/collab';
 
 const ACCEPT = 'audio/*,.wav,.aif,.aiff,.flac,.mp3,.m4a,.ogg';
@@ -23,7 +25,7 @@ function useWave(v: TrackVersion | null): WaveData | null {
   return w;
 }
 
-function Insights({ v }: { v: TrackVersion }) {
+function Insights({ v, plays }: { v: TrackVersion; plays?: { total: number; last30: number; viaLinks: number } }) {
   const m = v.meta;
   const stat = (label: string, value: string | null | undefined) => (
     <div className="stat">
@@ -41,6 +43,7 @@ function Insights({ v }: { v: TrackVersion }) {
       {stat('Format', m?.format.toUpperCase())}
       {stat('Length', m?.duration ? formatTime(m.duration) : null)}
       {stat('Size', m ? formatBytes(m.size) : null)}
+      {plays && stat('Plays', `${plays.last30} in 30 days · ${plays.total} total`)}
     </dl>
   );
 }
@@ -60,12 +63,32 @@ function TrackRow(props: {
   onDelete: () => void;
   onDragStart: (e: PointerEvent<HTMLButtonElement>) => void;
   onMoveKey: (dir: -1 | 1) => void;
+  plays?: { total: number; last30: number; viaLinks: number };
+  onChanged: (t: Track) => void;
 }) {
   const { t, index, open, canEdit, canAdmin } = props;
   const player = usePlayer();
   const wave = useWave(t.current);
   const [confirm, setConfirm] = useState(false);
+  const [trimming, setTrimming] = useState<TrackVersion | null>(null);
+  const [offline, setOffline] = useState(() => (t.current ? isOffline(t.current.file.id) : false));
+  const [saving, setSaving] = useState<number | null>(null);
   const active = player.item?.track.id === t.id;
+  const toggleOffline = async () => {
+    if (!t.current) return;
+    if (offline) {
+      await removeOffline(t.current.file.id);
+      setOffline(false);
+    } else {
+      setSaving(0);
+      try {
+        await keepOffline(t.current, t.title, setSaving);
+        setOffline(true);
+      } finally {
+        setSaving(null);
+      }
+    }
+  };
   const playing = active && player.status === 'playing';
   const loading = active && player.status === 'loading';
 
@@ -104,6 +127,8 @@ function TrackRow(props: {
           <span className="track-title">{t.title}</span>
           <span className="row-sub">
             v{t.current?.number ?? '–'} · {t.current?.meta ? t.current.meta.format.toUpperCase() : '—'}
+            {t.current && t.trims[t.current.id] && ' · trimmed'}
+            {saving !== null ? ` · saving offline ${Math.round(saving * 100)}%` : offline && ' · offline'}
             {t.current?.meta?.format === 'aiff' && ' · plays in Safari for now'}
           </span>
         </div>
@@ -117,6 +142,8 @@ function TrackRow(props: {
           items={[
             { label: open ? 'Hide versions' : 'Versions and insights', onSelect: props.onToggle },
             ...(canEdit ? [{ label: 'Upload new version', onSelect: props.onNewVersion }] : []),
+            ...(canEdit && t.current?.meta?.duration ? [{ label: 'Trim…', onSelect: () => setTrimming(t.current) }] : []),
+            ...(offlineSupported() && t.current ? [{ label: offline ? 'Remove offline copy' : 'Keep offline', onSelect: () => void toggleOffline() }] : []),
             ...(canAdmin ? [{ label: 'Delete track…', onSelect: () => { if (!open) props.onToggle(); setConfirm(true); }, danger: true }] : []),
           ]}
         />
@@ -147,18 +174,26 @@ function TrackRow(props: {
                         Version {v.number}
                         {v.id === t.current?.id && <span className="tag tag-ok">Current</span>}
                       </div>
-                      <p className="row-sub">{day(v.createdAt)}{v.meta?.fileName && ` · ${v.meta.fileName}`}{v.meta?.notes && ` · ${v.meta.notes}`}</p>
+                      <p className="row-sub">
+                        {day(v.createdAt)}{v.meta?.fileName && ` · ${v.meta.fileName}`}{v.meta?.notes && ` · ${v.meta.notes}`}
+                        {t.trims[v.id] && ` · plays ${formatTime(t.trims[v.id]!.start)}–${t.trims[v.id]!.end ? formatTime(t.trims[v.id]!.end!) : 'end'}`}
+                      </p>
                     </div>
                     <button type="button" className="btn btn-sm" onClick={() => props.onPlay(v)}>
                       {player.item?.version.id === v.id && player.status === 'playing' ? 'Playing' : 'Play'}<span className="visually-hidden"> version {v.number}</span>
                     </button>
+                    {canEdit && v.meta?.duration && (
+                      <button type="button" className="btn btn-ghost btn-sm" onClick={() => setTrimming(v)}>
+                        Trim<span className="visually-hidden"> version {v.number}</span>
+                      </button>
+                    )}
                     {canEdit && v.id !== t.current?.id && (
                       <button type="button" className="btn btn-ghost btn-sm" onClick={() => props.onMakeCurrent(v)}>
                         Make current<span className="visually-hidden"> (version {v.number})</span>
                       </button>
                     )}
                   </div>
-                  <Insights v={v} />
+                  <Insights v={v} plays={v.id === t.current?.id ? props.plays : undefined} />
                 </li>
               ))}
             </ul>
@@ -176,6 +211,7 @@ function TrackRow(props: {
           </div>
         )}
       </div>
+      {trimming && <TrimDialog project={props.project} track={t} version={trimming} open onClose={() => setTrimming(null)} onSaved={props.onChanged} />}
     </li>
   );
 }
@@ -183,6 +219,7 @@ function TrackRow(props: {
 export function TracksSection({ project, addOpen, setAddOpen, onTracks }: { project: Project; addOpen: boolean; setAddOpen: (v: boolean) => void; onTracks: (t: Track[]) => void }) {
   const player = usePlayer();
   const [tracks, setTracks] = useState<Track[] | null>(null);
+  const [plays, setPlays] = useState<Record<string, { total: number; last30: number; viaLinks: number }>>({});
   const [jobs, setJobs] = useState<UploadJob[]>([]);
   const [, force] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -218,6 +255,7 @@ export function TracksSection({ project, addOpen, setAddOpen, onTracks }: { proj
       setTracks(list);
       onTracks(list);
       if (canEdit) setStorage(await api('GET', '/account/storage'));
+      api<{ plays: typeof plays }>('GET', `/projects/${project.id}/plays`).then((r) => setPlays(r.plays)).catch(() => undefined);
     } catch (e) {
       setError(errorMessage(e));
     }
@@ -425,6 +463,8 @@ export function TracksSection({ project, addOpen, setAddOpen, onTracks }: { proj
               canAdmin={canAdmin}
               onToggle={() => setOpen(open === t.id ? null : t.id)}
               onPlay={(v, at) => play(t, v, at)}
+              plays={plays[t.id]}
+              onChanged={(nt) => setTracks((prev) => (prev ?? []).map((x) => (x.id === nt.id ? nt : x)))}
               onMakeCurrent={async (v) => {
                 try {
                   await makeCurrent(project, t, v.id);

@@ -47,9 +47,15 @@ export interface TrackVersion {
   file: TrackVersionDto['file'];
 }
 
+export interface Trim {
+  start: number;
+  end: number | null;
+}
 export interface Track {
   id: string;
   title: string;
+  /** Non-destructive trims per version (the original file is untouched). */
+  trims: Record<string, Trim>;
   position: number;
   currentVersionId: string | null;
   versions: TrackVersion[];
@@ -68,11 +74,19 @@ function needKey(project: Project): Uint8Array {
 
 async function decodeTrack(dto: TrackDto, projectId: string): Promise<Track> {
   let title = 'Untitled track';
+  const trims: Record<string, Trim> = {};
   try {
     const key = keyFor(projectId, dto.keyVersion);
     if (!key) throw new Error('locked');
-    const m = await openJson<{ title?: unknown }>(key, await fromBase64Url(dto.encMeta), trackCtx(dto.id));
+    const m = await openJson<{ title?: unknown; trims?: unknown }>(key, await fromBase64Url(dto.encMeta), trackCtx(dto.id));
     if (typeof m.title === 'string') title = m.title.slice(0, 200);
+    if (m.trims && typeof m.trims === 'object') {
+      for (const [vid, t] of Object.entries(m.trims as Record<string, Partial<Trim>>)) {
+        const start = typeof t?.start === 'number' && t.start >= 0 ? t.start : 0;
+        const end = typeof t?.end === 'number' && t.end > start ? t.end : null;
+        if (start > 0 || end) trims[vid] = { start, end };
+      }
+    }
   } catch {
     title = 'Locked track';
   }
@@ -88,7 +102,7 @@ async function decodeTrack(dto: TrackDto, projectId: string): Promise<Track> {
       return { id: v.id, number: v.number, createdBy: v.createdBy, createdAt: v.createdAt, meta, file: v.file };
     }),
   );
-  return { id: dto.id, title, position: dto.position, currentVersionId: dto.currentVersionId, versions, current: versions.find((v) => v.id === dto.currentVersionId) ?? versions.at(-1) ?? null };
+  return { id: dto.id, title, trims, position: dto.position, currentVersionId: dto.currentVersionId, versions, current: versions.find((v) => v.id === dto.currentVersionId) ?? versions.at(-1) ?? null };
 }
 
 /** The decrypted per-file key of a version (wrapped by the key version current at upload). */
@@ -104,11 +118,19 @@ export async function loadTracks(project: Project): Promise<Track[]> {
   return Promise.all(tracks.map((t) => decodeTrack(t, project.id)));
 }
 
-export async function renameTrack(project: Project, track: Track, title: string): Promise<Track> {
+export async function renameTrack(project: Project, track: Track, title: string, trims: Record<string, Trim> = track.trims): Promise<Track> {
   const key = needKey(project);
-  const encMeta = await toBase64Url(await sealJson(key, { title }, trackCtx(track.id)));
+  const encMeta = await toBase64Url(await sealJson(key, { title, trims }, trackCtx(track.id)));
   const { track: t } = await api<{ track: TrackDto }>('PATCH', `/tracks/${track.id}`, { encMeta, keyVersion: project.keyVersion });
   return decodeTrack(t, project.id);
+}
+
+/** Saves (or clears, with null) the trim of one version. */
+export function setTrim(project: Project, track: Track, versionId: string, trim: Trim | null): Promise<Track> {
+  const trims = { ...track.trims };
+  if (trim && (trim.start > 0 || trim.end)) trims[versionId] = trim;
+  else delete trims[versionId];
+  return renameTrack(project, track, track.title, trims);
 }
 
 export async function makeCurrent(project: Project, track: Track, versionId: string): Promise<Track> {

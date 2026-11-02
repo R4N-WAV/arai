@@ -1,6 +1,6 @@
 # Project Status — authoritative checklist
 
-Last updated: 2026-11-02 (session 10). Tests: 86 passing (crypto 17, shared 4, api 60, web 5) + browser E2E: `auth-flow` (11), `projects-flow` (10), `tracks-flow` (18), `profile-import-flow` (6). `[x]` done & tested · `[~]` in progress · `[ ]` not started · `[!]` blocked.
+Last updated: 2026-11-02 (session 12). Tests: 106 passing (crypto 20, shared 4, api 77, web 5) + browser E2E: `auth-flow`, `projects-flow`, `tracks-flow`, `profile-import-flow`, `collab-flow` (15), `messages-flow` (8), `audio-admin-flow` (7). `[x]` done & tested · `[~]` in progress · `[ ]` not started · `[!]` blocked.
 
 ## Phase 0 — Research & architecture
 - [x] Repository inspected (empty, greenfield)
@@ -55,30 +55,39 @@ Last updated: 2026-11-02 (session 10). Tests: 86 passing (crypto 17, shared 4, a
 - [x] Mobile: cover-first project hero, single-row icon actions, calm rows, menus as bottom sheets; avatar picture in shell; smooth pointer-following drag with edge auto-scroll
 - [x] Installable app: web manifest (standalone), iOS home-screen meta, app icons from the அ mark (`scripts/build-icons.mjs`), safe-area padding; Back button on all non-tab pages (mobile bar + desktop)
 - [x] Home-screen app polish: solid top bar (no backdrop blur smearing content at the status bar), native rubber-band scrolling restored, lightweight ambient on phones (CSS gradients, static grain tile, no live SVG filters) for smooth 60 fps scrolling
-- [ ] Gapless (sample-accurate) playback
-- [ ] Version comparison (A/B), search (client-side)
+- [ ] Version comparison (A/B), search (client-side) — gapless tracked in Phase 6
 - [x] Library import from Samply / Untitled downloads (ADR-012): folder, ZIP or files; projects per folder, versions grouped by name markers, colour from cover art; review/rename before import; quota-aware; runs through the encrypted upload pipeline (unit tests + E2E)
 - [x] Layout centred on wide screens (content column, auth, empty states)
 
 ## Phase 3 — Privacy & collaboration
-- [ ] Project key envelopes, member key grants, pending grants
-- [ ] Invitations (username/email/link), roles, revoke + key rotation
-- [ ] Time-coded comments, replies, resolve, per version
-- [ ] Share links (fragment key, password, expiry, download/comment flags)
-- [ ] Publish/unpublish (public bucket copies)
+- [x] Keyring: every member holds all key versions they were granted; tracks/versions/comments/files record their key version (migration 0005)
+- [x] Invitations by username (all key versions sealed + signed), accept/decline in the library, pending shown in People; roles listener/editor/admin with owner/admin rules (8 API tests + collab E2E)
+- [x] Remove member / leave / decline → key rotation for exactly the remaining members (admin client, automatic); old content still decrypts
+- [x] Time-coded comments per version: replies (one level), resolve/reopen, edit, delete, waveform markers, jump-to-time; encrypted
+- [x] Share links: fragment secret, optional password, expiry, download button, guest comments; payload refreshed when tracks change; streaming via the service worker with a share token
+- [x] Public listening for public projects (published link; not E2EE by design, stated in the UI) — profiles and Discover link to `/listen/<id>`
+- [ ] Invite by email or invite link (email provider-gated)
 
 ## Phase 4 — Social
-- [x] Profiles (pulled forward at owner's request): display name, bio, location, up to 8 https links, profile picture + header (client re-encode, server magic-byte/size/dimension checks), public view for signed-out visitors, glow from public project colours (migration 0004; 5 API tests; E2E)
-- [ ] Listening from profiles (needs public audio copies) · [ ] follows · [ ] friends · [ ] blocks/reports · [ ] discovery & FTS · [ ] notifications
+- [x] Profiles (session 6) · [x] listening from profiles · [x] follows · [x] friends (request/accept) · [x] blocks (end follows/friendships, hide from lookup) · [x] reports · [x] FTS5 discovery of public projects and people · [x] notifications (Activity page, bell with unread count)
 
 ## Phase 5 — Messaging
-- [ ] ADR-005 final decision · [ ] DMs/groups/project chats · [ ] DO realtime · [ ] attachments · [ ] reactions/edits/deletes/receipts/typing · [ ] GIFs (configurable) · [ ] message requests
+- [x] E2EE DMs, groups (admin add/remove, rotation on leave) and project chats (project keyring) (migration 0007; 5 API tests; messages E2E)
+- [x] Realtime via per-user Durable Object hub (hibernating WebSockets): messages, edits, deletes, reactions, typing, read receipts
+- [x] Encrypted attachments up to 25 MB (quota-counted) · [x] reactions (fixed set) · [x] edit / delete for everyone · [x] message requests · [x] report message with optional evidence
+- [!] GIFs — greyed out until a GIF provider key is configured (`FEATURE_GIFS`, `GIF_API_KEY`)
 
 ## Phase 6 — Advanced audio
-- [ ] Speed/pitch independent · [ ] trim · [ ] section loop · [ ] offline encrypted cache · [ ] analytics · [ ] gapless
+- [x] Varispeed (pitch follows speed) alongside pitch-preserving speed · [ ] independent pitch shift (needs a DSP worklet)
+- [x] Non-destructive trim per version (encrypted in track metadata) · [x] A–B section loop
+- [x] Offline copies (ciphertext in Cache Storage; service worker falls back to it) with management in Settings
+- [x] Play counts (daily per-track totals, member vs link; shown in insights) (migration 0008)
+- [ ] Gapless (sample-accurate) playback · [ ] A/B version compare
 
 ## Phase 7 — Administration
-- [ ] CLI bootstrap · [ ] dashboard · [ ] moderation · [ ] hash-chained audit log verification · [ ] stats
+- [x] CLI bootstrap `scripts/admin.mjs` (grant-owner, grant-moderator, revoke, list, verify-audit)
+- [x] Dashboard `/admin`: stats, reports queue with actions (dismiss, hide/unhide project, restrict, suspend, reactivate, ban [owner], remove comment/message), moderators (owner), audit log with live chain verification
+- [x] Restricted accounts cannot publish, share or start conversations; suspended/banned accounts are signed out everywhere
 
 ## Phase 8 — Release
 - [ ] Security audit · [ ] a11y audit · [ ] responsive tests · [ ] perf · [ ] deployment & backup docs · [ ] release checklist

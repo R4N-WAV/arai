@@ -44,6 +44,16 @@ export function PlayerBar() {
         <span className="mono player-time">{formatTime(p.duration)}</span>
       </div>
       <div className="player-extras">
+        <button
+          type="button"
+          className="icon-btn ab-btn"
+          aria-pressed={p.ab.a !== null}
+          aria-label={p.ab.a === null ? 'Loop a section: set start (A)' : p.ab.b === null ? `Loop from ${formatTime(p.ab.a)}: set end (B)` : `Looping ${formatTime(p.ab.a)}–${formatTime(p.ab.b)}. Clear loop`}
+          title={p.ab.a === null ? 'Loop a section' : p.ab.b === null ? 'Set loop end' : 'Clear loop'}
+          onClick={p.cycleAB}
+        >
+          <span aria-hidden="true">{p.ab.a === null ? 'A–B' : p.ab.b === null ? 'A–' : 'A–B'}</span>
+        </button>
         <button type="button" className="icon-btn" aria-label="Repeat this track" aria-pressed={p.loop} onClick={() => p.setLoop(!p.loop)}>
           <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3l3 3-3 3M4 11V9a3 3 0 0 1 3-3h13M7 21l-3-3 3-3M20 13v2a3 3 0 0 1-3 3H4" /></svg>
         </button>
@@ -53,6 +63,9 @@ export function PlayerBar() {
             {RATES.map((r) => <option key={r} value={r}>{r}×</option>)}
           </select>
         </label>
+        <button type="button" className="btn btn-ghost btn-sm varispeed" aria-pressed={!p.pitchLock} onClick={() => p.setPitchLock(!p.pitchLock)} title="When on, changing speed also changes pitch, like tape">
+          Varispeed
+        </button>
         <label className="volume">
           <span className="visually-hidden">Volume</span>
           <input type="range" min={0} max={1} step={0.01} value={p.volume} onChange={(e) => p.setVolume(Number(e.target.value))} />

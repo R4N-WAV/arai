@@ -81,11 +81,49 @@ Libraries: **libsodium.js** (audited) and **Web Crypto**. No custom primitives.
   covers. Password-protected links additionally require server-side password
   check (Argon2id client-side, HMAC server-side) before ciphertext URLs issue.
 
-### 3.3 Messaging
-See ARCHITECTURE ADR-005. Messages are signed (Ed25519) and encrypted with the
-conversation epoch key; epoch rotates on every membership change and every
-N messages/7 days. Attachments use the file scheme above with keys embedded
-in the encrypted message.
+### 3.3 Messaging (implemented, session 12)
+- DMs and groups have a random conversation key, delivered to each member as
+  a signed sealed grant (scope `conversation`); project chats use the project
+  keyring. Bodies (text, attachment keys) are AEAD-sealed with context
+  `message/<id>`; group names with `conversation/<id>/meta`.
+- Key versions: removing/leaving a group marks `rotation_due`; the admin's
+  browser makes a new key for exactly the remaining members (server checks
+  the member set). Members keep older versions (keyring) to read history.
+  There is no forward secrecy within a key version and no per-message
+  signature (the AEAD key is shared by the group, so a member could forge a
+  message attributed to another member; the server enforces sender ids).
+- Attachments: per-file key, 1 MiB chunks (same scheme as audio), key inside
+  the encrypted message; only PNG/JPEG/GIF/WebP and audio render inline.
+- Realtime: one hibernating WebSocket hub per user; the socket requires a
+  session and same-origin `Origin` (CSWSH guard); events carry ids and
+  ciphertext only.
+- Metadata the server sees: who is in which conversation, when messages are
+  sent, read times, typing pings, attachment sizes, and reactions (a fixed
+  set of six, stored in clear like read receipts).
+- Message requests: strangers (not friends, not followed) land in Requests
+  and may send at most 3 messages until accepted; blocks stop delivery.
+
+### 3.3a Collaboration (implemented, session 12)
+- Invitations seal **every** project key version to the invitee (signed);
+  invitees can read the project name before accepting, so any removal,
+  decline or leave marks the key for rotation. Admin clients rotate
+  automatically on next load; tracks, versions, comments and files record
+  the key version that encrypted them (keyring, no bulk re-encryption).
+- Comments: encrypted with the project key (`comment/<id>`); time position
+  inside the ciphertext. Guest comments via a share link use the link key.
+- Share links: `/s/<id>#<secret>`. The 32-byte secret never reaches the
+  server. token = BLAKE2b(secret, "token"‖password), key = BLAKE2b(secret,
+  "key"‖password); the server stores SHA-256(token) only and requires the
+  token to return the payload or any chunk. The payload (titles, file keys of
+  the current versions) is sealed with the link key; members hold the secret
+  sealed under the project key so they can refresh payloads when tracks
+  change and read guest comments. Password attempts are rate-limited per link
+  and per network. Expiry and revocation are enforced server-side. "No
+  download" only hides the button (streaming implies recording).
+- **Public listening is not end-to-end encrypted, by design**: making a
+  project public publishes one link whose secret is stored in clear, so
+  anyone (and the server) can decrypt the current versions. Older versions,
+  comments and chats stay encrypted. Making it private revokes the link.
 
 ### 3.4 Multi-device
 Each device has its own X25519/Ed25519 key pair registered in `user_keys`;
@@ -148,7 +186,13 @@ unknown tokens get 410 and the page falls back to in-memory decryption.
 
 `platform_roles` (owner, moderator) are distinct from `project_members.role`.
 Admin endpoints return metadata only (account status, counts, sizes, report
-records, security events). Moderation can suspend/ban/restrict and delete
+records, security events). Implemented in session 12: `routes/admin.ts`
+(404 for non-admins), dashboard at `/admin`. Roles are granted only by
+`scripts/admin.mjs` with database access (wrangler credentials); usernames
+are validated before use; CLI actions are appended to the same hash chain.
+Moderators can restrict (no publishing, sharing or new conversations),
+suspend (all sessions revoked) or hide projects/remove reported items; only
+the platform owner can ban or appoint moderators; nobody acts on the owner. Moderation can suspend/ban/restrict and delete
 *public* content; it cannot read private content because the server cannot.
 Reported private messages: the reporter's client may voluntarily attach the
 decrypted reported messages (user-initiated disclosure, clearly stated).
@@ -174,6 +218,11 @@ email/SMS 2FA, no login alerts by email, and no email reset. Bot protection
 currently relies on rate limits + honeypot; Turnstile is wired but needs
 `TURNSTILE_SECRET`/`TURNSTILE_SITE_KEY` + `REQUIRE_TURNSTILE=true` (free, no
 domain needed) — recommended before public launch.
+
+Collaboration-specific: someone removed from a project keeps whatever they
+already downloaded, and still holds the key versions they were granted
+(they lose server access to ciphertext and never get the new key). Play
+counts are daily per-track totals (no listener ids).
 
 Other limitations: private content is not server-searchable (client-side
 search only); SMS 2FA requires a paid provider; streaming permission implies

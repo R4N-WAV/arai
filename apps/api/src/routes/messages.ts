@@ -197,6 +197,7 @@ messages.post('/conversations', async (c) => {
   const body = await parseBody(c, createConversationRequest);
   if (!body) return bad(c);
   const me = c.get('session').user_id;
+  if (c.get('session').status === 'restricted') return c.json({ error: 'account_restricted' }, 403);
   if (!(await rateLimit(c.env.DB, `conv-create:${me}`, 60, 3600_000))) return c.json({ error: 'too_many_attempts' }, 429);
   const others = [...new Set(body.userIds)].filter((u) => u !== me);
   if (others.length === 0 || (body.kind === 'dm' && others.length !== 1)) return bad(c);

@@ -22,6 +22,10 @@ interface PlayerState {
   volume: number;
   loop: boolean;
   rate: number;
+  /** false = varispeed: pitch follows speed, like a tape machine. */
+  pitchLock: boolean;
+  /** Section loop (A–B), seconds. */
+  ab: { a: number | null; b: number | null };
   wave: WaveData | null;
   playQueue: (items: QueueItem[], start: number) => void;
   toggle: () => void;
@@ -31,6 +35,9 @@ interface PlayerState {
   setVolume: (v: number) => void;
   setLoop: (v: boolean) => void;
   setRate: (r: number) => void;
+  setPitchLock: (v: boolean) => void;
+  /** Cycles: set A at the playhead → set B → clear. */
+  cycleAB: () => void;
   /** Stop and clear the queue (e.g. the playing track was deleted). */
   clear: () => void;
 }
@@ -48,6 +55,11 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const [volume, setVolumeState] = useState(1);
   const [loop, setLoop] = useState(false);
   const [rate, setRateState] = useState(1);
+  const [pitchLock, setPitchLockState] = useState(true);
+  const [ab, setAb] = useState<{ a: number | null; b: number | null }>({ a: null, b: null });
+  const counted = useRef<string | null>(null);
+  const abRef = useRef(ab);
+  abRef.current = ab;
   const [wave, setWave] = useState<WaveData | null>(null);
   const loadToken = useRef(0);
   const prefetched = useRef(new Set<string>());
@@ -59,6 +71,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     if (!it || !el) return;
     const token = ++loadToken.current;
     setStatus('loading');
+    setAb({ a: null, b: null });
     setLoadProgress(0);
     setTime(0);
     setDuration(it.version.meta?.duration ?? 0);
@@ -67,7 +80,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       // Stream (starts after the first chunk); fall back to full decrypt.
       let url = await streamUrl(it.project, it.version).catch(() => null);
       if (token !== loadToken.current) return;
-      const startAt = it.startAt ?? 0;
+      const startAt = it.startAt ?? it.track.trims?.[it.version.id]?.start ?? 0;
       const applyStart = () => {
         if (startAt > 0) el.addEventListener('loadedmetadata', () => (el.currentTime = startAt), { once: true });
       };
@@ -112,11 +125,35 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     const on = (name: string, fn: () => void) => (el.addEventListener(name, fn), () => el.removeEventListener(name, fn));
     const offs = [
       // 'playing' fires only when sound actually starts; 'waiting' when it stalls.
-      on('playing', () => setStatus('playing')),
+      on('playing', () => {
+        setStatus('playing');
+        // Count one play per load (daily totals only; see /projects/:id/plays).
+        const cur = queue[index];
+        if (cur && counted.current !== `${cur.version.id}:${loadToken.current}`) {
+          counted.current = `${cur.version.id}:${loadToken.current}`;
+          void fetch(`/api/tracks/${cur.track.id}/play`, { method: 'POST', headers: { 'X-Arai-CSRF': '1' }, credentials: 'same-origin' }).catch(() => undefined);
+        }
+      }),
       on('waiting', () => setStatus('loading')),
       on('pause', () => setStatus((s) => (s === 'loading' ? s : 'paused'))),
       on('timeupdate', () => {
         setTime(el.currentTime);
+        const cur = queue[index];
+        // Section loop, then the version's trim end (acts like the track ending).
+        if (abRef.current.a !== null && abRef.current.b !== null && el.currentTime >= abRef.current.b) {
+          el.currentTime = abRef.current.a;
+          return;
+        }
+        const end = cur?.track.trims?.[cur.version.id]?.end;
+        if (end && el.currentTime >= end) {
+          if (el.loop) el.currentTime = cur.track.trims![cur.version.id]!.start ?? 0;
+          else if (index < queue.length - 1) go(index + 1);
+          else {
+            el.pause();
+            el.currentTime = end;
+          }
+          return;
+        }
         // Warm the next track well before this one ends, so the switch is instant.
         const nextItem = queue[index + 1];
         if (nextItem && el.duration && el.currentTime > Math.min(10, el.duration * 0.25) && !prefetched.current.has(nextItem.version.id)) {
@@ -225,6 +262,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     volume,
     loop,
     rate,
+    pitchLock,
+    ab,
     wave,
     playQueue,
     toggle: () => {
@@ -263,11 +302,19 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     setRate: (r) => {
       setRateState(r);
       if (audio.current) {
-        audio.current.preservesPitch = true; // speed without changing pitch
+        audio.current.preservesPitch = pitchLock; // speed without changing pitch, unless varispeed
         audio.current.playbackRate = r;
       }
     },
-  }), [queue, index, item, status, loadProgress, time, duration, volume, loop, rate, wave, playQueue, go]);
+    setPitchLock: (v) => {
+      setPitchLockState(v);
+      if (audio.current) audio.current.preservesPitch = v;
+    },
+    cycleAB: () => {
+      const t = audio.current?.currentTime ?? 0;
+      setAb((x) => (x.a === null ? { a: t, b: null } : x.b === null ? (t > x.a + 0.25 ? { a: x.a, b: t } : { a: null, b: null }) : { a: null, b: null }));
+    },
+  }), [queue, index, item, status, loadProgress, time, duration, volume, loop, rate, pitchLock, ab, wave, playQueue, go]);
 
   return (
     <Ctx.Provider value={value}>
