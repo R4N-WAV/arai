@@ -4,6 +4,8 @@ import { COLOURS } from '../components/ProjectForm';
 import { Notice } from '../components/Unavailable';
 import { api, errorMessage } from '../lib/api';
 import { formatBytes } from '../lib/audio';
+import { prepareImage } from '../lib/images';
+import { ART_BYTES, ART_PX, uploadArt } from '../lib/art';
 import { buildPlan, coverColour, expandZips, fromDrop, fromFileList, type ImportPlan, type SourceFile } from '../lib/importer';
 import { useProjects, type Project } from '../lib/projects';
 import { UPLOAD_ERRORS, UploadJob, type Track } from '../lib/tracks';
@@ -12,7 +14,7 @@ type Phase = 'pick' | 'reading' | 'review' | 'importing' | 'done';
 interface Result { name: string; project: Project | null; uploaded: number; failed: { file: string; reason: string }[] }
 
 export function ImportPage() {
-  const { create } = useProjects();
+  const { create, refresh } = useProjects();
   const [phase, setPhase] = useState<Phase>('pick');
   const [plan, setPlan] = useState<ImportPlan | null>(null);
   const [names, setNames] = useState<Record<string, string>>({});
@@ -70,6 +72,8 @@ export function ImportPage() {
       try {
         const color = (p.cover && (await coverColour(p.cover))) ?? COLOURS[i % COLOURS.length]!.hex;
         r.project = await create({ name: r.name.slice(0, 120), description: 'Imported', genre: '', tags: ['imported'], color }, 'private');
+        // The cover becomes the project's artwork (square-cropped and re-encoded here).
+        if (p.cover) await prepareImage(p.cover, { w: ART_PX, h: ART_PX }, ART_BYTES).then((img) => uploadArt(r.project!, img)).catch(() => undefined);
       } catch (e) {
         r.failed.push({ file: 'project', reason: errorMessage(e) });
         done += p.tracks.reduce((m, t) => m + t.versions.length, 0);
@@ -100,6 +104,7 @@ export function ImportPage() {
       }
     }
     setPhase('done');
+    void refresh();
   }
 
   const onDrop = (e: DragEvent) => {
@@ -174,7 +179,7 @@ export function ImportPage() {
                   <p className="row-sub">
                     {p.tracks.length} track{p.tracks.length === 1 ? '' : 's'}
                     {p.tracks.some((t) => t.versions.length > 1) && ` · ${p.tracks.reduce((n, t) => n + t.versions.length, 0)} versions`} · {formatBytes(p.bytes)}
-                    {p.cover && ' · colour from cover art'}
+                    {p.cover && ' · cover art becomes the artwork'}
                   </p>
                   <details className="import-tracks">
                     <summary>Tracks</summary>

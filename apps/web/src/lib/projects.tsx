@@ -29,6 +29,7 @@ export interface Project {
   /** null when this browser could not open the project key (shown as locked). */
   meta: ProjectMeta | null;
   rotationDue: boolean;
+  art: { at: number; keyVersion: number } | null;
   /** Username of whoever invited you, while this is an open invitation. */
   invitedBy?: string;
 }
@@ -70,7 +71,7 @@ function cleanMeta(m: unknown): ProjectMeta | null {
 const publicPart = (m: ProjectMeta): PublicMeta => ({ name: m.name, description: m.description, genre: m.genre, tags: m.tags, color: m.color });
 
 async function decode(dto: ProjectDto, keys: AccountKeys, myId: string): Promise<Project> {
-  const base = { id: dto.id, role: dto.role, visibility: dto.visibility, keyVersion: dto.keyVersion, createdAt: dto.createdAt, updatedAt: dto.updatedAt, rotationDue: dto.rotationDue, ...(dto.invitedBy ? { invitedBy: dto.invitedBy } : {}) };
+  const base = { id: dto.id, role: dto.role, visibility: dto.visibility, keyVersion: dto.keyVersion, createdAt: dto.createdAt, updatedAt: dto.updatedAt, rotationDue: dto.rotationDue, art: dto.art, ...(dto.invitedBy ? { invitedBy: dto.invitedBy } : {}) };
   // Open every key version we hold; each grant's signature is checked first.
   for (const g of dto.grants) {
     if (keyCache.has(`${dto.id}:${g.keyVersion}`)) continue;

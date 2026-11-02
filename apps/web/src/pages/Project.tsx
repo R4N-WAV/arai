@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
-import { Cover } from '../components/Cover';
+import { ProjectCover } from '../components/Cover';
 import { Field } from '../components/Field';
 import { Modal } from '../components/Modal';
 import { ProjectForm } from '../components/ProjectForm';
@@ -8,6 +8,8 @@ import { TracksSection } from '../components/TracksSection';
 import { PeopleDialog } from '../components/PeopleDialog';
 import { ShareDialog } from '../components/ShareDialog';
 import { ensurePublicListening } from '../lib/collab';
+import { ImageCropper } from '../components/ImageCropper';
+import { ART_BYTES, ART_PX, publishArt, removeArt, uploadArt, useArt } from '../lib/art';
 import { Notice } from '../components/Unavailable';
 import { errorMessage } from '../lib/api';
 import { formatTime } from '../lib/audio';
@@ -20,7 +22,9 @@ const date = (t: number) => new Date(t).toLocaleDateString(undefined, { day: 'nu
 
 /** Everything about the project itself, in one overlay: details, visibility, deletion. */
 function EditDetails({ p, open, onClose, tracks }: { p: Project; open: boolean; onClose: () => void; tracks: Track[] }) {
-  const { update, remove } = useProjects();
+  const { update, remove, refresh } = useProjects();
+  const [cropFile, setCropFile] = useState<File | null>(null);
+  const art = useArt(p);
   const nav = useNavigate();
   const [confirmVis, setConfirmVis] = useState(false);
   const [confirmName, setConfirmName] = useState('');
@@ -66,6 +70,42 @@ function EditDetails({ p, open, onClose, tracks }: { p: Project; open: boolean; 
         onSubmit={(v) => run(async () => { await update(p, { meta: v.meta }); onClose(); }, 'Saved.')}
       />
 
+      <section className="modal-section" aria-labelledby="art-h">
+        <h3 id="art-h">Artwork</h3>
+        <div className="art-row">
+          <ProjectCover p={p} size="hero" />
+          <div className="form-actions">
+            <label className="btn btn-sm file-btn">
+              {art ? 'Replace artwork…' : 'Add artwork…'}
+              <input type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/avif" className="visually-hidden" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) setCropFile(f); }} />
+            </label>
+            {p.art && (
+              <button type="button" className="btn btn-ghost btn-sm" disabled={busy} onClick={() => run(async () => { await removeArt(p); await refresh(); }, 'Artwork removed.')}>
+                Remove artwork
+              </button>
+            )}
+          </div>
+        </div>
+        <p className="row-sub">Square, cropped here and encrypted before upload. The background takes its colours from it.</p>
+        {cropFile && (
+          <ImageCropper
+            file={cropFile}
+            aspect={1}
+            output={{ w: ART_PX, h: ART_PX }}
+            maxBytes={ART_BYTES}
+            onCancel={() => setCropFile(null)}
+            onDone={(blob) => {
+              setCropFile(null);
+              void run(async () => {
+                const colour = await uploadArt(p, blob);
+                if (colour && /^#[0-9a-f]{6}$/i.test(colour)) await update(p, { meta: { ...meta, color: colour } });
+                await refresh();
+              }, 'Artwork saved.');
+            }}
+          />
+        )}
+      </section>
+
       {canAdmin && (
         <section className="modal-section" aria-labelledby="vis-h">
           <h3 id="vis-h">Visibility</h3>
@@ -84,7 +124,7 @@ function EditDetails({ p, open, onClose, tracks }: { p: Project; open: boolean; 
                   : 'Its name, description, genre and tags will be stored unencrypted and visible to anyone. Everything else stays encrypted. You can make it private again later.'}
               </p>
               <div className="form-actions">
-                <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={() => run(async () => { const next = await update(p, { visibility: p.visibility === 'public' ? 'private' : 'public' }); await ensurePublicListening(next, tracks); }, p.visibility === 'public' ? 'The project is private now.' : 'The project is public now. Anyone can listen from your profile.')}>
+                <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={() => run(async () => { const next = await update(p, { visibility: p.visibility === 'public' ? 'private' : 'public' }); await ensurePublicListening(next, tracks); await publishArt(next).catch(() => undefined); }, p.visibility === 'public' ? 'The project is private now.' : 'The project is public now. Anyone can listen from your profile.')}>
                   {p.visibility === 'public' ? 'Make private' : 'Make public'}
                 </button>
                 <button type="button" className="btn btn-ghost btn-sm" onClick={() => setConfirmVis(false)}>Cancel</button>
@@ -151,7 +191,7 @@ export function ProjectPage() {
     <div className="project-page">
       <header className="project-hero">
         <div className="cover-shared" style={{ viewTransitionName: `cover-${p.id}` }}>
-          <Cover name={meta.name} color={meta.color} size="hero" />
+          <ProjectCover p={p} size="hero" />
         </div>
         <div className="project-hero-text">
           <p className="row-sub project-meta">

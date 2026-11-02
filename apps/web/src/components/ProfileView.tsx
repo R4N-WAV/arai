@@ -4,6 +4,7 @@ import { Link } from 'react-router';
 import { api, errorMessage } from '../lib/api';
 import { useAmbient } from './Ambient';
 import { Cover } from './Cover';
+import { publicArtUrl } from '../lib/art';
 import { Menu } from './Menu';
 import { ReportDialog } from './ReportDialog';
 import { Notice } from './Unavailable';
@@ -123,7 +124,7 @@ export function ProfileView({ profile, isOwn, signedIn = false }: { profile: Pro
             {profile.projects.map((p) => {
               const inner = (
                 <>
-                  <Cover name={p.publicMeta.name} color={p.publicMeta.color ?? '#8a8f98'} />
+                  <Cover name={p.publicMeta.name} color={p.publicMeta.color ?? '#8a8f98'} art={publicArtUrl(p.id, p.art)} />
                   <span className="sleeve-name">{p.publicMeta.name}</span>
                   <span className="sleeve-meta">{p.listenable ? 'Listen' : [p.publicMeta.genre, ...p.publicMeta.tags].filter(Boolean).join(' · ') || 'public'}</span>
                 </>

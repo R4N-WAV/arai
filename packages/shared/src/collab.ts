@@ -93,7 +93,7 @@ export interface ShareDto {
 }
 /** Decrypted share payload. */
 export interface SharePayload {
-  project: { name: string; color: string; description: string };
+  project: { name: string; color: string; description: string; art?: string | null };
   tracks: Array<{
     title: string;
     versionId: string;
@@ -134,6 +134,7 @@ export interface DiscoverProjectDto {
   publishedAt: number;
   owner: string;
   listenable: boolean;
+  art: number | null;
 }
 
 // ---- messaging ----------------------------------------------------------------

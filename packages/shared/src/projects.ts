@@ -48,6 +48,8 @@ export interface ProjectDto {
   grants: Array<{ keyVersion: number; wrappedKey: string; signature: string; grantedBy: string; granterSignKey: string }>;
   /** A member was removed and the key has not been rotated yet (admins rotate). */
   rotationDue: boolean;
+  /** Encrypted cover artwork, if any (fetch /projects/:id/art). */
+  art: { at: number; keyVersion: number } | null;
   /** Set while this is an invitation that has not been accepted. */
   invitedBy?: string;
   createdAt: number;

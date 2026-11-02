@@ -5,8 +5,10 @@ import { ipHmac, requireSecret, sha256, toB64 } from './crypto.js';
 import { randomId } from './ids.js';
 
 export const SESSION_COOKIE = 'arai_s'; // sent as __Host-arai_s
-export const IDLE_MS = 7 * 24 * 3600 * 1000;
-export const ABSOLUTE_MS = 30 * 24 * 3600 * 1000;
+// Signed in until you sign out (owner's choice): browsers cap cookies at 400 days.
+// Sessions stay revocable from Settings, and idle ones still expire.
+export const IDLE_MS = 180 * 24 * 3600 * 1000;
+export const ABSOLUTE_MS = 400 * 24 * 3600 * 1000;
 const TOUCH_MS = 5 * 60 * 1000;
 
 export function clientIp(c: Context<AppBindings>): string {

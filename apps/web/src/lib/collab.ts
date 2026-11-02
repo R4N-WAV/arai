@@ -9,6 +9,7 @@ import type { CommentBody, CommentDto, MemberDto, ShareDto, SharePayload, UserKe
 import { api } from './api';
 import { keyFor, newProjectId as newId, projectKey, type Project } from './projects';
 import { fileKeyOf, type Track } from './tracks';
+import { artDataUrl } from './art';
 
 // ---- people -------------------------------------------------------------------
 
@@ -170,7 +171,7 @@ async function buildPayload(p: Project, tracks: Track[]): Promise<{ payload: Sha
     }),
   );
   return {
-    payload: { project: { name: p.meta?.name ?? 'Project', color: p.meta?.color ?? '#8a8f98', description: p.meta?.description ?? '' }, tracks: items },
+    payload: { project: { name: p.meta?.name ?? 'Project', color: p.meta?.color ?? '#8a8f98', description: p.meta?.description ?? '', art: await artDataUrl(p).catch(() => null) }, tracks: items },
     files: items.map((i) => ({ fileId: i.file.id, versionId: i.versionId })),
   };
 }

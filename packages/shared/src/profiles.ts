@@ -33,6 +33,8 @@ export interface PublicProjectDto {
   publishedAt: number;
   /** Has a public listening link (audio playable by anyone). */
   listenable?: boolean;
+  /** Public artwork version (GET /public/projects/:id/art?v=…), null when none. */
+  art?: number | null;
 }
 
 export interface ProfileDto {

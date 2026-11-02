@@ -70,3 +70,7 @@
 - Phase 5: E2EE DMs/groups/project chats, per-user realtime hub, attachments, reactions, edits/deletes, read receipts, typing, message requests; GIFs greyed out (migration 0007).
 - Phase 6: varispeed, trim, A–B loop, offline copies, play counts (migration 0008). Phase 7: admin CLI, dashboard, moderation actions, restricted/suspended enforcement.
 - Bugs found by E2E and fixed: "a editor" grammar; People/Share dialogs reset on project refresh; message menus remounted by read receipts (thread reloaded on every conversation refresh); WebSocket response headers immutable under the security-header middleware; typing indicator only fired on key presses.
+
+## Session 13 — 2026-11-02
+- Owner feedback: stay signed in until sign-out; artwork upload now; unreadable native dropdown on desktop; grain looked thrown on top; continue through phase 14 (spec defines 0–8; phases 9–14 defined from the backlog in PROJECT_STATUS).
+- Remembered devices (migration 0009 `sessions.device_secret`, double-wrapped keys, 400-day sessions), artwork (encrypted, public copy, share payload, import uses cover art, colour from the dominant hue), dropdown colours, grain only inside colour (overlay 0.28) and no cover noise. `admin.mjs` accepts "@name".

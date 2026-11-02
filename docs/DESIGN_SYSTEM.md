@@ -23,8 +23,9 @@ off-white: **colour only ever comes from the user's music.**
   Fraunces italic "voice".
 - Real content over decoration: track lists show cover thumbnails, not
   coloured markers.
-- Texture is analogue: grain, ink-like displaced edges, slight -3° tilt on
-  the hand-lettered logo.
+- Texture is analogue but quiet: a fine grain lives only inside the coloured
+  light (overlay blend, invisible on pure black); covers and surfaces are
+  clean. Slight -3° tilt on the hand-lettered logo.
 
 ## Logo
 

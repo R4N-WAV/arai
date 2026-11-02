@@ -108,7 +108,7 @@ function SharedPlayer({ s }: { s: OpenedShare }) {
   return (
     <div className="share-page">
       <header className="project-hero">
-        <Cover name={p.project.name} color={p.project.color} size="hero" />
+        <Cover name={p.project.name} color={p.project.color} size="hero" art={p.project.art ?? null} />
         <div className="project-hero-text">
           <p className="row-sub project-meta">{tracks.length} track{tracks.length === 1 ? '' : 's'} · shared with you</p>
           <h1>{p.project.name}</h1>

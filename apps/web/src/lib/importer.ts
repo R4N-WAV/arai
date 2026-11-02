@@ -196,7 +196,7 @@ export function buildPlan(sources: SourceFile[]): ImportPlan {
 }
 
 /** Average colour of a cover image (for the project colour / ambient glow). */
-export async function coverColour(file: File): Promise<string | null> {
+export async function coverColour(file: Blob): Promise<string | null> {
   try {
     const bmp = await createImageBitmap(file);
     const c = document.createElement('canvas');
@@ -205,15 +205,29 @@ export async function coverColour(file: File): Promise<string | null> {
     ctx.drawImage(bmp, 0, 0, 24, 24);
     bmp.close();
     const d = ctx.getImageData(0, 0, 24, 24).data;
-    let r = 0, g = 0, b = 0, n = 0;
+    // Group pixels by hue and keep the strongest group, so a two-colour cover
+    // gives one of its colours rather than a muddy average of both.
+    const buckets = Array.from({ length: 12 }, () => ({ r: 0, g: 0, b: 0, w: 0 }));
+    let gray = { r: 0, g: 0, b: 0, w: 0 };
     for (let i = 0; i < d.length; i += 4) {
-      // Weight saturated pixels so a cover's character wins over its background.
-      const max = Math.max(d[i]!, d[i + 1]!, d[i + 2]!), min = Math.min(d[i]!, d[i + 1]!, d[i + 2]!);
-      const w = 1 + (max - min) / 32;
-      r += d[i]! * w; g += d[i + 1]! * w; b += d[i + 2]! * w; n += w;
+      const r = d[i]!, g = d[i + 1]!, b = d[i + 2]!;
+      const max = Math.max(r, g, b), min = Math.min(r, g, b), chroma = max - min;
+      if (chroma < 24 || max < 30) {
+        gray = { r: gray.r + r, g: gray.g + g, b: gray.b + b, w: gray.w + 1 };
+        continue;
+      }
+      let h = max === r ? ((g - b) / chroma) % 6 : max === g ? (b - r) / chroma + 2 : (r - g) / chroma + 4;
+      if (h < 0) h += 6;
+      const k = Math.floor(h * 2) % 12;
+      const w = chroma * (max / 255);
+      const bk = buckets[k]!;
+      bk.r += r * w; bk.g += g * w; bk.b += b * w; bk.w += w;
     }
-    const hex = (v: number) => Math.round(v / n).toString(16).padStart(2, '0');
-    return `#${hex(r)}${hex(g)}${hex(b)}`;
+    const best = buckets.reduce((x, y) => (y.w > x.w ? y : x));
+    const pick = best.w > 0 ? best : gray.w > 0 ? gray : null;
+    if (!pick) return null;
+    const hex = (v: number) => Math.max(0, Math.min(255, Math.round(v / pick.w))).toString(16).padStart(2, '0');
+    return `#${hex(pick.r)}${hex(pick.g)}${hex(pick.b)}`;
   } catch {
     return null;
   }

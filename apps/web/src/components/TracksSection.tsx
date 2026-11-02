@@ -239,7 +239,7 @@ export function TracksSection({ project, addOpen, setAddOpen, onTracks }: { proj
   const shareSig = useRef<string | null>(null);
   useEffect(() => {
     if (!tracks || project.role === 'listener') return;
-    const sig = tracks.map((t) => `${t.id}:${t.current?.id}:${t.title}`).join('|');
+    const sig = `${project.art?.at ?? 0}|${project.meta?.name}|` + tracks.map((t) => `${t.id}:${t.current?.id}:${t.title}`).join('|');
     const prev = shareSig.current;
     shareSig.current = sig;
     if (prev === null || prev === sig) return;

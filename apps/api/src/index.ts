@@ -27,7 +27,7 @@ const chunkLimit = bodyLimit({ maxSize: 1024 * 1024 + 64, onError: (c) => c.json
 // Only encrypted audio chunks, profile images and encrypted share payloads may exceed 64 KB (up to 1 MiB).
 const isBinaryUpload = (method: string, path: string) =>
   ((method === 'POST' || method === 'PUT') && /^\/api\/projects\/[a-z2-7]{26}\/shares(\/[a-z2-7]{26})?$/.test(path)) ||
-  (method === 'PUT' && (/^\/api\/(files|conv-files)\/[a-z2-7]{26}\/chunks\/\d+$/.test(path) || /^\/api\/account\/profile\/(avatar|banner)$/.test(path)));
+  (method === 'PUT' && (/^\/api\/projects\/[a-z2-7]{26}\/art(\/public)?$/.test(path) || /^\/api\/(files|conv-files)\/[a-z2-7]{26}\/chunks\/\d+$/.test(path) || /^\/api\/account\/profile\/(avatar|banner)$/.test(path)));
 app.use('/api/*', (c, next) => (isBinaryUpload(c.req.method, c.req.path) ? chunkLimit(c, next) : jsonLimit(c, next)));
 
 app.get('/api/health', async (c) => {

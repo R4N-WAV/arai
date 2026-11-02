@@ -20,7 +20,8 @@ import { fileURLToPath } from 'node:url';
 const apiDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'apps', 'api');
 const args = process.argv.slice(2);
 const where = args.includes('--local') ? '--local' : '--remote';
-const [cmd, username] = args.filter((a) => !a.startsWith('--'));
+const [cmd, rawName] = args.filter((a) => !a.startsWith('--'));
+const username = rawName?.replace(/^@/, ''); // "@r4n" and "r4n" both work
 
 function sql(command) {
   const out = execFileSync('npx', ['wrangler', 'd1', 'execute', 'arai', where, '--json', '--command', command], { cwd: apiDir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });

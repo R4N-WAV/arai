@@ -59,12 +59,17 @@ if (await page.getByRole('heading', { name: 'Unlock Arai' }).count()) throw new 
 step('logo click navigates without locking');
 await page.reload();
 await page.getByRole('heading', { name: 'Library' }).waitFor();
-step('reload in the same tab stays unlocked (tab-scoped key)');
+step('reload stays unlocked');
 const tab2 = await ctx.newPage();
 tab2.on('pageerror', (e) => problems.push(`pageerror: ${e.message}`));
 await tab2.goto(`${BASE}/settings`);
+await tab2.getByRole('heading', { name: 'Settings' }).waitFor();
+step('a new tab opens unlocked (remembered device)');
+// Without the stored device key (cleared site data), the password is needed again.
+await tab2.evaluate(() => localStorage.clear());
+await tab2.reload();
 await tab2.getByRole('heading', { name: 'Unlock Arai' }).waitFor();
-step('a new tab requires unlock (keys never shared via server or disk in plaintext)');
+step('without the device key, Arai asks for the password (keys never stored in plaintext)');
 await tab2.getByLabel('Password').fill('wrong password 1');
 await tab2.getByRole('button', { name: 'Unlock' }).click();
 await tab2.getByRole('alert').waitFor();

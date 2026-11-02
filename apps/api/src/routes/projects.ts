@@ -4,6 +4,7 @@ import { fromB64, toB64 } from '../lib/crypto.js';
 import { requireProjectRole } from '../lib/projects.js';
 import { purgeFiles } from './tracks.js';
 import { reindexProject } from './social.js';
+import { inspectImage } from '../lib/images.js';
 import { rateLimit } from '../lib/ratelimit.js';
 import { requireUser, type AuthedBindings } from '../lib/session.js';
 import { parseBody } from '../lib/validate.js';
@@ -21,6 +22,8 @@ interface Row {
   enc_meta: ArrayBuffer;
   public_meta: string | null;
   rotation_due: number;
+  art_at: number | null;
+  art_key_version: number | null;
   accepted_at: number | null;
   invited_by: string | null;
   created_at: number;
@@ -37,6 +40,7 @@ interface KeyRow {
 
 // Membership-scoped query: a project is only ever returned to its members.
 const SELECT = `SELECT p.id, m.role, p.visibility, p.key_version, p.enc_meta, p.public_meta, p.rotation_due, p.created_at, p.updated_at,
+    (SELECT updated_at FROM project_art WHERE project_id = p.id) AS art_at, (SELECT key_version FROM project_art WHERE project_id = p.id) AS art_key_version,
     m.accepted_at, (SELECT u.username FROM users u WHERE u.id = m.added_by) AS invited_by
   FROM project_members m
   JOIN projects p ON p.id = m.project_id AND p.deleted_at IS NULL
@@ -71,6 +75,7 @@ export async function projectDtos(db: D1Database, userId: string, rows: Row[]): 
       .filter((k) => k.granter_sign_key)
       .map((k) => ({ keyVersion: k.key_version, wrappedKey: toB64(k.wrapped_key), signature: toB64(k.grant_sig), grantedBy: k.granted_by, granterSignKey: toB64(k.granter_sign_key!) })),
     rotationDue: r.rotation_due === 1,
+    art: r.art_at && r.art_key_version ? { at: r.art_at, keyVersion: r.art_key_version } : null,
     ...(r.accepted_at === null && r.invited_by ? { invitedBy: r.invited_by } : {}),
     createdAt: r.created_at,
     updatedAt: r.updated_at,
@@ -162,7 +167,12 @@ projects.patch('/projects/:id', async (c) => {
   }
   await c.env.DB.prepare(`UPDATE projects SET ${sets.join(', ')} WHERE id = ?`).bind(...args, id).run();
   // Going private withdraws the public listening link straight away.
-  if (nextVis === 'private') await c.env.DB.prepare('UPDATE share_links SET revoked_at = ? WHERE project_id = ? AND is_public = 1 AND revoked_at IS NULL').bind(now, id).run();
+  if (nextVis === 'private') {
+    await c.env.DB.batch([
+      c.env.DB.prepare('UPDATE share_links SET revoked_at = ? WHERE project_id = ? AND is_public = 1 AND revoked_at IS NULL').bind(now, id),
+      c.env.DB.prepare('UPDATE project_art SET public_data = NULL, public_mime = NULL WHERE project_id = ?').bind(id),
+    ]);
+  }
   await reindexProject(c.env.DB, id);
   return c.json({ project: await one(c.env.DB, userId, id) });
 });
@@ -183,6 +193,64 @@ projects.delete('/projects/:id', async (c) => {
   await reindexProject(c.env.DB, id);
   const files = await c.env.DB.prepare("SELECT id FROM files WHERE project_id = ? AND status != 'deleted'").bind(id).all<{ id: string }>();
   await purgeFiles(c.env, c.executionCtx, id, files.results.map((f) => f.id));
+  return c.json({ ok: true });
+});
+
+// ---- artwork ------------------------------------------------------------------
+
+const MAX_ART = 600 * 1024;
+
+projects.put('/projects/:id/art', async (c) => {
+  const id = c.req.param('id');
+  const userId = c.get('session').user_id;
+  if (!(await requireProjectRole(c.env.DB, id, userId, 'editor'))) {
+    const any = await requireProjectRole(c.env.DB, id, userId, 'listener');
+    return any ? c.json({ error: 'forbidden' }, 403) : c.json(notFound, 404);
+  }
+  const kv = Number(c.req.header('X-Key-Version'));
+  const p = await c.env.DB.prepare('SELECT key_version FROM projects WHERE id = ?').bind(id).first<{ key_version: number }>();
+  if (kv !== p!.key_version) return c.json({ error: 'stale_key' }, 409);
+  const data = new Uint8Array(await c.req.arrayBuffer());
+  // Ciphertext: XChaCha20-Poly1305 blob (24-byte nonce + 16-byte tag at least).
+  if (data.byteLength < 64 || data.byteLength > MAX_ART) return c.json({ error: 'invalid_image' }, 400);
+  if (!(await rateLimit(c.env.DB, `art:${userId}`, 60, 3600_000))) return c.json({ error: 'too_many_attempts' }, 429);
+  const now = Date.now();
+  await c.env.DB.batch([
+    c.env.DB.prepare(
+      'INSERT INTO project_art (project_id, key_version, enc_data, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(project_id) DO UPDATE SET key_version = excluded.key_version, enc_data = excluded.enc_data, public_data = NULL, public_mime = NULL, updated_at = excluded.updated_at',
+    ).bind(id, kv, data, now),
+    c.env.DB.prepare('UPDATE projects SET updated_at = ? WHERE id = ?').bind(now, id),
+  ]);
+  return c.json({ art: { at: now, keyVersion: kv } });
+});
+
+/** Plain copy for a public project (shown on profiles, Discover and the listen page). */
+projects.put('/projects/:id/art/public', async (c) => {
+  const id = c.req.param('id');
+  const userId = c.get('session').user_id;
+  if (!(await requireProjectRole(c.env.DB, id, userId, 'editor'))) return c.json(notFound, 404);
+  const p = await c.env.DB.prepare('SELECT visibility FROM projects WHERE id = ?').bind(id).first<{ visibility: string }>();
+  if (p?.visibility !== 'public') return c.json({ error: 'not_public' }, 409);
+  const data = new Uint8Array(await c.req.arrayBuffer());
+  const info = data.byteLength <= MAX_ART ? inspectImage(data) : null;
+  if (!info || info.width > 2000 || info.height > 2000 || info.width < 16 || info.height < 16) return c.json({ error: 'invalid_image' }, 400);
+  const res = await c.env.DB.prepare('UPDATE project_art SET public_data = ?, public_mime = ? WHERE project_id = ?').bind(data, info.mime, id).run();
+  if (!res.meta.changes) return c.json({ error: 'no_art' }, 409);
+  return c.json({ ok: true });
+});
+
+projects.get('/projects/:id/art', async (c) => {
+  const id = c.req.param('id');
+  if (!(await requireProjectRole(c.env.DB, id, c.get('session').user_id, 'listener'))) return c.json(notFound, 404);
+  const row = await c.env.DB.prepare('SELECT enc_data, key_version FROM project_art WHERE project_id = ?').bind(id).first<{ enc_data: ArrayBuffer | number[]; key_version: number }>();
+  if (!row) return c.json(notFound, 404);
+  return new Response(new Uint8Array(row.enc_data as ArrayLike<number>), { headers: { 'Content-Type': 'application/octet-stream', 'X-Key-Version': String(row.key_version), 'Cache-Control': 'private, no-cache' } });
+});
+
+projects.delete('/projects/:id/art', async (c) => {
+  const id = c.req.param('id');
+  if (!(await requireProjectRole(c.env.DB, id, c.get('session').user_id, 'editor'))) return c.json(notFound, 404);
+  await c.env.DB.prepare('DELETE FROM project_art WHERE project_id = ?').bind(id).run();
   return c.json({ ok: true });
 });
 

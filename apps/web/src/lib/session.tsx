@@ -34,7 +34,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       const s = await api<{ user: SessionUser; unlock: UnlockInfo }>('GET', '/auth/session');
       setUser(s.user);
       setUnlockInfo(s.unlock);
-      // Same tab reloaded? Restore keys without asking for the password again.
+      // Remembered device? Restore keys without asking for the password again.
       const restored = await restoreForTab(s.user.id, s.unlock.encPrivateKeys);
       if (restored) setKeysState((k) => k ?? restored);
     } catch (e) {

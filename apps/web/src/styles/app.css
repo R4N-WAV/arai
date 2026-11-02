@@ -36,7 +36,8 @@ a:hover { text-decoration-color: currentColor; }
 .ambient-glow svg { width: 100%; height: 100%; overflow: visible; }
 .ambient-mark { position: absolute; left: 50%; top: 12vh; width: 78vmin; margin-left: -39vmin; color: var(--text); opacity: 0.1; animation: settle 16s ease-in-out infinite; }
 .ambient-shade { position: absolute; inset: 0; background: linear-gradient(180deg, rgb(8 8 10 / 0) 0%, rgb(8 8 10 / 0.45) 60%, rgb(8 8 10 / 0.88) 100%); }
-.ambient-grain { position: absolute; inset: 0; background: url('/grain.png') repeat; background-size: 128px 128px; opacity: 0.55; }
+/* Grain only shows inside the coloured light: overlay blending leaves pure black untouched. */
+.ambient-grain { position: absolute; inset: 0; background: url('/grain.png') repeat; background-size: 192px 192px; opacity: 0.28; mix-blend-mode: overlay; }
 @keyframes seep { from { opacity: 0; transform: scale(0.82); } to { opacity: 1; transform: scale(1); } }
 @keyframes unseep { from { opacity: 1; } to { opacity: 0; transform: scale(1.08); } }
 @keyframes drift {
@@ -192,7 +193,6 @@ a:hover { text-decoration-color: currentColor; }
 .sleeve-name { font: 600 var(--fs-lg)/1.2 var(--font-display); letter-spacing: -0.02em; }
 .sleeve-meta { font-size: var(--fs-sm); color: var(--muted); text-transform: none; }
 .cover { position: relative; aspect-ratio: 1 / 1; border-radius: var(--r-xs); overflow: hidden; box-shadow: 0 22px 40px -26px rgb(0 0 0 / 0.95); isolation: isolate; }
-.cover::after { content: ""; position: absolute; inset: 0; opacity: 0.16; mix-blend-mode: multiply; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
 .cover-title { position: absolute; left: 12px; right: 12px; bottom: 10px; text-align: left; font: 600 0.8125rem/1.2 var(--font-ui); letter-spacing: 0.01em; z-index: 1; }
 .cover-hero { width: 168px; flex: none; }
 .cover-hero .cover-title { font-size: 0.75rem; }
@@ -560,7 +560,6 @@ body { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
   .player { backdrop-filter: none; -webkit-backdrop-filter: none; background: rgb(18 17 22 / 0.97); }
   .tabbar { backdrop-filter: none; -webkit-backdrop-filter: none; background: var(--void); }
   .modal::backdrop { backdrop-filter: none; background: rgb(4 4 6 / 0.72); }
-  .cover::after { display: none; }
   .ambient-glow { will-change: transform; }
 }
 
@@ -716,3 +715,14 @@ textarea.input, .comment-form textarea { min-height: 0; padding: var(--s-3) var(
 input[type="range"] { accent-color: var(--text); width: 100%; }
 .admin-stats { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
 .report-text { margin: var(--s-2) 0 0; color: var(--text-2); overflow-wrap: anywhere; }
+
+/* Native dropdowns: Windows/Chrome draw the option list with the select's own
+   colours, and a translucent background turns into white. Give both solid values. */
+select.input, select { background-color: #141318; color: var(--text); }
+select option, select optgroup { background-color: #141318; color: var(--text); }
+select option:checked { background-color: #2a2830; color: var(--text); }
+.cover > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+.art-row { display: flex; gap: var(--s-5); align-items: center; flex-wrap: wrap; margin-bottom: var(--s-3); }
+.art-row .cover-hero { width: 120px; }
+.file-btn { cursor: pointer; }
+.file-btn:focus-within { outline: 2px solid var(--text); outline-offset: 2px; }

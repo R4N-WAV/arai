@@ -245,6 +245,25 @@ auth.post('/auth/logout', async (c) => {
 
 const authed = new Hono<AuthedBindings>();
 authed.use('/auth/session', requireUser);
+authed.use('/auth/device-secret', requireUser);
+
+/**
+ * Remembered device: the server half of this session's unlock key. Created
+ * once per session; it disappears with the session (sign out or revoke).
+ */
+authed.post('/auth/device-secret', async (c) => {
+  const s = c.get('session');
+  const row = await c.env.DB.prepare('SELECT device_secret FROM sessions WHERE id = ?').bind(s.session_id).first<{ device_secret: ArrayBuffer | null }>();
+  if (row?.device_secret) return c.json({ secret: toB64(row.device_secret) });
+  const secret = crypto.getRandomValues(new Uint8Array(32));
+  await c.env.DB.prepare('UPDATE sessions SET device_secret = ? WHERE id = ? AND device_secret IS NULL').bind(secret, s.session_id).run();
+  const again = await c.env.DB.prepare('SELECT device_secret FROM sessions WHERE id = ?').bind(s.session_id).first<{ device_secret: ArrayBuffer }>();
+  return c.json({ secret: toB64(again!.device_secret) });
+});
+authed.get('/auth/device-secret', async (c) => {
+  const row = await c.env.DB.prepare('SELECT device_secret FROM sessions WHERE id = ?').bind(c.get('session').session_id).first<{ device_secret: ArrayBuffer | null }>();
+  return row?.device_secret ? c.json({ secret: toB64(row.device_secret) }) : c.json({ error: 'not_found' }, 404);
+});
 authed.use('/account/*', requireUser);
 
 /** Current user + encrypted vault (client unlocks with the password, username path). */

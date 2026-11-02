@@ -28,11 +28,12 @@ export async function loadProfile(db: D1Database, where: { username: string } | 
   const { results } = await db
     .prepare(
       `SELECT p.id, p.public_meta, p.published_at,
-         EXISTS (SELECT 1 FROM share_links l WHERE l.project_id = p.id AND l.is_public = 1 AND l.revoked_at IS NULL) AS listenable
+         EXISTS (SELECT 1 FROM share_links l WHERE l.project_id = p.id AND l.is_public = 1 AND l.revoked_at IS NULL) AS listenable,
+         (SELECT updated_at FROM project_art a WHERE a.project_id = p.id AND a.public_data IS NOT NULL) AS art
        FROM projects p WHERE p.owner_id = ? AND p.visibility = 'public' AND p.deleted_at IS NULL AND p.hidden_at IS NULL ORDER BY p.published_at DESC LIMIT 100`,
     )
     .bind(u.id)
-    .all<{ id: string; public_meta: string; published_at: number; listenable: number }>();
+    .all<{ id: string; public_meta: string; published_at: number; listenable: number; art: number | null }>();
   return {
     username: u.username,
     displayName: u.display_name ?? '',
@@ -42,7 +43,7 @@ export async function loadProfile(db: D1Database, where: { username: string } | 
     avatar: u.avatar,
     banner: u.banner,
     joinedAt: u.created_at,
-    projects: results.map((r) => ({ id: r.id, publicMeta: JSON.parse(r.public_meta), publishedAt: r.published_at, listenable: r.listenable === 1 })),
+    projects: results.map((r) => ({ id: r.id, publicMeta: JSON.parse(r.public_meta), publishedAt: r.published_at, listenable: r.listenable === 1, art: r.art })),
   };
 }
 

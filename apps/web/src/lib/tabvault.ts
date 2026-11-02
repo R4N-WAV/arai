@@ -1,29 +1,43 @@
 /**
- * Keeps the account keys unlocked across reloads *within one browser tab*.
+ * Remembered device: keeps the account keys available after the app or
+ * browser is closed, until you sign out (owner's choice: no password on
+ * every open).
  *
- * - A fresh AES-GCM key is generated as a non-extractable CryptoKey and kept in
- *   IndexedDB: script can use it but can never read its bytes, so it cannot be
- *   copied off the device.
- * - The account keys are encrypted with it and the ciphertext is kept in
- *   sessionStorage, which the browser discards when the tab closes.
- * - Signing out deletes both. Nothing here is sent to the server.
+ * The account secret key is encrypted twice:
+ *  1. with a non-extractable AES-GCM key kept in IndexedDB (script on this
+ *     origin can use it but never read its bytes, so it cannot be copied off
+ *     the device), then
+ *  2. with a 32-byte secret the server keeps for this session only
+ *     (POST /auth/device-secret, needs the HttpOnly session cookie).
+ * The result sits in localStorage. Copying the browser profile alone is not
+ * enough, and signing out or revoking the session in Settings destroys the
+ * server half, so the stored keys become unreadable. Nothing here sends key
+ * material to the server.
  *
- * Trade-off (documented in SECURITY.md): code running in this tab could already
- * use the in-memory keys, so this adds no new exposure to XSS; it only avoids
- * re-entering the password on reload. Closing the tab locks again.
+ * Trade-off (SECURITY.md §3.5): anyone who can use this unlocked browser can
+ * open Arai, as with any "stay signed in" app.
  */
 import { decryptPrivateKeys, fromBase64Url, toBase64Url, type AccountKeys } from '@arai/crypto';
 
 const DB_NAME = 'arai-device';
 const STORE = 'tab-keys';
-const SLOT = 'arai.tab-unlock';
-const MAX_AGE_MS = 30 * 24 * 3600 * 1000;
+const SLOT = 'arai.device-unlock';
+const OLD_SLOT = 'arai.tab-unlock';
+const MAX_AGE_MS = 400 * 24 * 3600 * 1000;
 
 interface Stored {
   id: string;
   userId: string;
   iv: string;
+  iv2: string;
   ct: string;
+}
+
+async function serverKey(): Promise<CryptoKey> {
+  const res = await fetch('/api/auth/device-secret', { method: 'POST', headers: { 'X-Arai-CSRF': '1' }, credentials: 'same-origin' });
+  if (!res.ok) throw new Error('no device secret');
+  const { secret } = (await res.json()) as { secret: string };
+  return crypto.subtle.importKey('raw', (await fromBase64Url(secret)) as BufferSource, 'AES-GCM', false, ['encrypt', 'decrypt']);
 }
 
 function openDb(): Promise<IDBDatabase> {
@@ -71,10 +85,14 @@ export async function rememberForTab(userId: string, keys: AccountKeys): Promise
     const id = crypto.randomUUID();
     await tx('readwrite', (s) => s.put({ key, createdAt: Date.now() }, id));
     const payload = new TextEncoder().encode(JSON.stringify({ ask: await toBase64Url(keys.ask) }));
+    const aad = new TextEncoder().encode(userId);
     const iv = crypto.getRandomValues(new Uint8Array(12));
-    const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv, additionalData: new TextEncoder().encode(userId) }, key, payload));
+    const inner = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv, additionalData: aad }, key, payload));
+    const iv2 = crypto.getRandomValues(new Uint8Array(12));
+    const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv: iv2, additionalData: aad }, await serverKey(), inner));
     const previous = readSlot();
-    sessionStorage.setItem(SLOT, JSON.stringify({ id, userId, iv: await toBase64Url(iv), ct: await toBase64Url(ct) } satisfies Stored));
+    localStorage.setItem(SLOT, JSON.stringify({ id, userId, iv: await toBase64Url(iv), iv2: await toBase64Url(iv2), ct: await toBase64Url(ct) } satisfies Stored));
+    sessionStorage.removeItem(OLD_SLOT);
     if (previous) await tx('readwrite', (s) => s.delete(previous.id));
     void pruneOld();
   } catch {
@@ -84,25 +102,23 @@ export async function rememberForTab(userId: string, keys: AccountKeys): Promise
 
 function readSlot(): Stored | null {
   try {
-    const raw = sessionStorage.getItem(SLOT);
+    const raw = localStorage.getItem(SLOT);
     return raw ? (JSON.parse(raw) as Stored) : null;
   } catch {
     return null;
   }
 }
 
-/** Restores keys for this tab; needs the server's encrypted private-key blob. */
+/** Restores keys on a remembered device; needs the server's encrypted private-key blob and this session's device secret. */
 export async function restoreForTab(userId: string, encPrivateKeys: string): Promise<AccountKeys | null> {
   const slot = readSlot();
   if (!slot || slot.userId !== userId) return null;
   try {
     const rec = await tx<{ key: CryptoKey } | undefined>('readonly', (s) => s.get(slot.id));
-    if (!rec) return null;
-    const pt = await crypto.subtle.decrypt(
-      { name: 'AES-GCM', iv: new Uint8Array(await fromBase64Url(slot.iv)), additionalData: new TextEncoder().encode(userId) },
-      rec.key,
-      new Uint8Array(await fromBase64Url(slot.ct)),
-    );
+    if (!rec || !slot.iv2) return null;
+    const aad = new TextEncoder().encode(userId);
+    const inner = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: new Uint8Array(await fromBase64Url(slot.iv2)), additionalData: aad }, await serverKey(), new Uint8Array(await fromBase64Url(slot.ct)));
+    const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: new Uint8Array(await fromBase64Url(slot.iv)), additionalData: aad }, rec.key, inner);
     const { ask } = JSON.parse(new TextDecoder().decode(pt)) as { ask: string };
     return await decryptPrivateKeys(await fromBase64Url(ask), await fromBase64Url(encPrivateKeys));
   } catch {
@@ -112,7 +128,8 @@ export async function restoreForTab(userId: string, encPrivateKeys: string): Pro
 
 export async function forgetAllTabs(): Promise<void> {
   try {
-    sessionStorage.removeItem(SLOT);
+    localStorage.removeItem(SLOT);
+    sessionStorage.removeItem(OLD_SLOT);
     await tx('readwrite', (s) => s.clear());
   } catch {
     /* nothing stored */

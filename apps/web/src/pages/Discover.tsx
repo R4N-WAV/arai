@@ -2,6 +2,7 @@ import type { DiscoverProjectDto, PersonDto } from '@arai/shared';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { Cover } from '../components/Cover';
+import { publicArtUrl } from '../lib/art';
 import { Avatar } from '../components/ProfileView';
 import { Notice } from '../components/Unavailable';
 import { api, errorMessage } from '../lib/api';
@@ -57,7 +58,7 @@ export function Discover() {
               {res.projects.map((p) => (
                 <li key={p.id}>
                   <Link to={p.listenable ? `/listen/${p.id}` : `/u/${p.owner}`} className="sleeve">
-                    <Cover name={p.publicMeta.name} color={p.publicMeta.color ?? '#8a8f98'} />
+                    <Cover name={p.publicMeta.name} color={p.publicMeta.color ?? '#8a8f98'} art={publicArtUrl(p.id, p.art)} />
                     <span className="sleeve-name">{p.publicMeta.name}</span>
                     <span className="sleeve-meta">@{p.owner}{p.publicMeta.genre && ` · ${p.publicMeta.genre}`}</span>
                   </Link>

@@ -584,17 +584,28 @@ collab.post('/share/:linkId/play', async (c) => {
   return c.json({ ok: true });
 });
 
+collab.get('/public/projects/:id/art', async (c) => {
+  const row = await c.env.DB.prepare(
+    "SELECT a.public_data, a.public_mime FROM project_art a JOIN projects p ON p.id = a.project_id WHERE a.project_id = ? AND p.visibility = 'public' AND p.deleted_at IS NULL AND p.hidden_at IS NULL AND a.public_data IS NOT NULL",
+  )
+    .bind(c.req.param('id'))
+    .first<{ public_data: ArrayBuffer | number[]; public_mime: string }>();
+  if (!row) return notFound(c);
+  // URLs carry ?v=<updated_at>; images are public by the owner's choice.
+  return new Response(new Uint8Array(row.public_data as ArrayLike<number>), { headers: { 'Content-Type': row.public_mime, 'Cache-Control': 'public, max-age=31536000, immutable', 'Content-Disposition': 'inline' } });
+});
+
 /** Public listening: the link of a public project, secret included (public by the owner's choice). */
 collab.get('/public/projects/:id', async (c) => {
   const row = await c.env.DB.prepare(
-    `SELECT p.public_meta, l.id AS link_id, l.public_secret FROM projects p
+    `SELECT p.public_meta, l.id AS link_id, l.public_secret, (SELECT updated_at FROM project_art a WHERE a.project_id = p.id AND a.public_data IS NOT NULL) AS art FROM projects p
        LEFT JOIN share_links l ON l.project_id = p.id AND l.is_public = 1 AND l.revoked_at IS NULL
       WHERE p.id = ? AND p.visibility = 'public' AND p.deleted_at IS NULL`,
   )
     .bind(c.req.param('id'))
-    .first<{ public_meta: string; link_id: string | null; public_secret: string | null }>();
+    .first<{ public_meta: string; link_id: string | null; public_secret: string | null; art: number | null }>();
   if (!row) return notFound(c);
-  return c.json({ meta: JSON.parse(row.public_meta), link: row.link_id ? { id: row.link_id, secret: row.public_secret } : null });
+  return c.json({ meta: JSON.parse(row.public_meta), art: row.art, link: row.link_id ? { id: row.link_id, secret: row.public_secret } : null });
 });
 
 export default collab;

@@ -222,10 +222,11 @@ social.get('/discover', async (c) => {
   const q = (c.req.query('q') ?? '').slice(0, 200);
   const match = ftsQuery(q);
   const projectSql = `SELECT p.id, p.public_meta, p.published_at, u.username AS owner,
-      EXISTS (SELECT 1 FROM share_links l WHERE l.project_id = p.id AND l.is_public = 1 AND l.revoked_at IS NULL) AS listenable
+      EXISTS (SELECT 1 FROM share_links l WHERE l.project_id = p.id AND l.is_public = 1 AND l.revoked_at IS NULL) AS listenable,
+      (SELECT updated_at FROM project_art a WHERE a.project_id = p.id AND a.public_data IS NOT NULL) AS art
     FROM projects p JOIN users u ON u.id = p.owner_id AND u.status = 'active'
     WHERE p.visibility = 'public' AND p.deleted_at IS NULL AND p.hidden_at IS NULL`;
-  type PRow = { id: string; public_meta: string; published_at: number; owner: string; listenable: number };
+  type PRow = { id: string; public_meta: string; published_at: number; owner: string; listenable: number; art: number | null };
   let projects: PRow[];
   let people: PersonRow[];
   if (match) {
@@ -236,7 +237,7 @@ social.get('/discover', async (c) => {
     people = [];
   }
   return c.json({
-    projects: projects.map((r) => ({ id: r.id, publicMeta: JSON.parse(r.public_meta), publishedAt: r.published_at, owner: r.owner, listenable: r.listenable === 1 })),
+    projects: projects.map((r) => ({ id: r.id, publicMeta: JSON.parse(r.public_meta), publishedAt: r.published_at, owner: r.owner, listenable: r.listenable === 1, art: r.art })),
     people: people.map(person),
   });
 });

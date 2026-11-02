@@ -130,15 +130,27 @@ Each device has its own X25519/Ed25519 key pair registered in `user_keys`;
 new devices are added after vault unlock (the ASK decrypts the account's
 long-term key, which re-seals project keys to the new device).
 
-### 3.5 Staying unlocked within a tab
-After sign-in the account secret key is encrypted with a fresh,
-**non-extractable** AES-GCM CryptoKey kept in IndexedDB; the ciphertext lives
-in `sessionStorage` (cleared when the tab closes) and is bound to the user id.
-A reload in the same tab restores the keys without the password; a new tab or a
-closed-and-reopened tab must unlock again. Sign-out (or a 401) deletes both.
-Nothing is sent to the server. Script running in the tab could already use
-the in-memory keys, so this adds no XSS exposure; the raw key bytes can never
-be read out of the browser (`apps/web/src/lib/tabvault.ts`).
+### 3.5 Remembered devices (session 13, owner's request: no password on every open)
+- Sessions last until sign-out: 400-day cookie (browser maximum), 180-day
+  idle expiry, revocable per device in Settings.
+- The account secret key is wrapped twice and kept in localStorage:
+  AES-GCM with a non-extractable key in IndexedDB (cannot be exported or
+  copied off the device), then AES-GCM with a 32-byte secret the server keeps
+  on that session row (`POST /auth/device-secret`, HttpOnly cookie required).
+- Copying browser storage without the live session is useless; revoking the
+  session (sign out, "sign out other devices", suspension) deletes the server
+  half, so the stored keys can no longer be opened. Sign-out also wipes the
+  local copies. Losing local storage just means typing the password once.
+- Trade-off: anyone using that unlocked browser profile can open Arai, as with
+  any stay-signed-in app; script running in the page could already use the
+  in-memory keys, so XSS exposure is unchanged.
+
+### 3.5a Artwork
+Cover art is cropped and re-encoded in the browser (EXIF/GPS stripped),
+sealed with the project key (`project/<id>/art`) and stored in D1. Public
+projects also publish a plain copy, validated server-side (magic bytes,
+16–2000 px, ≤ 600 KB) and removed the moment the project goes private.
+Share links carry the artwork inside their encrypted payload.
 
 ### 3.6 Audio files (implemented)
 Per-file random key, wrapped with the project key (`file/<id>/key` context).

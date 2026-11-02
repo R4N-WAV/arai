@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router';
-import { Cover } from '../components/Cover';
+import { ProjectCover } from '../components/Cover';
 import { Notice } from '../components/Unavailable';
 import { roleWithArticle, useProjects } from '../lib/projects';
 import { errorMessage } from '../lib/api';
@@ -32,7 +32,7 @@ function Invitations() {
       <ul className="list">
         {invites.map((p) => (
           <li key={p.id} className="row invite-row">
-            {p.meta ? <Cover name={p.meta.name} color={p.meta.color} size="thumb" /> : <div className="cover cover-thumb cover-locked" aria-hidden="true" />}
+            <ProjectCover p={p} size="thumb" />
             <div className="row-main">
               <div className="row-title">{p.meta?.name ?? 'A project'}</div>
               <p className="row-sub">@{p.invitedBy} invited you as {roleWithArticle(p.role)}</p>
@@ -101,7 +101,7 @@ export function Library() {
             <li key={p.id}>
               <Link to={`/projects/${p.id}`} className="sleeve" viewTransition>
                 <div className="cover-shared" style={{ viewTransitionName: `cover-${p.id}` }}>
-                  {p.meta ? <Cover name={p.meta.name} color={p.meta.color} /> : <div className="cover cover-locked" aria-hidden="true" />}
+                  <ProjectCover p={p} />
                 </div>
                 <span className="sleeve-name">{p.meta?.name ?? 'Locked project'}</span>
                 <span className="sleeve-meta">

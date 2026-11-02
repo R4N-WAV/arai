@@ -1,6 +1,6 @@
 import { formatTime } from '../lib/audio';
 import { usePlayer } from '../lib/player';
-import { Cover } from './Cover';
+import { ProjectCover } from './Cover';
 import { Waveform } from './Waveform';
 
 const RATES = [0.5, 0.75, 1, 1.25, 1.5, 2];
@@ -9,11 +9,10 @@ export function PlayerBar() {
   const p = usePlayer();
   if (!p.item) return null;
   const { item } = p;
-  const color = item.project.meta?.color ?? '#8a8f98';
   return (
     <section className="player" aria-label="Player">
       <div className="player-track">
-        <Cover name="" color={color} size="thumb" />
+        <ProjectCover p={item.project} size="thumb" />
         <div className="player-titles">
           <span className="player-title">{item.track.title}</span>
           <span className="player-sub">
