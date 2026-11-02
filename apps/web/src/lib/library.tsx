@@ -93,19 +93,19 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
   }, [keys]);
 
   // Save shortly after changes (batched), encrypted.
-  const save = useCallback((next: LibraryPrefs) => {
+  const save = useCallback((next: LibraryPrefs, delay = 800) => {
     clearTimeout(timer.current);
     timer.current = setTimeout(async () => {
       if (!key.current || !loaded.current) return;
       const encData = await toBase64Url(await sealJson(key.current, next, CTX));
       await api('PUT', '/account/prefs', { encData }).catch(() => undefined);
-    }, 800);
+    }, delay);
   }, []);
   const update = useCallback(
-    (fn: (p: LibraryPrefs) => LibraryPrefs) =>
+    (fn: (p: LibraryPrefs) => LibraryPrefs, delay?: number) =>
       setPrefs((prev) => {
         const next = clean(fn(prev));
-        save(next);
+        save(next, delay);
         return next;
       }),
     [save],
@@ -125,7 +125,7 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
       setInFolder: (fid, pid, inside) =>
         update((p) => ({ ...p, folders: p.folders.map((f) => (f.id !== fid ? f : { ...f, projectIds: inside ? [...new Set([...f.projectIds, pid])] : f.projectIds.filter((x) => x !== pid) })) })),
       ready,
-      dismissWelcome: () => update((p) => ({ ...p, welcomed: true })),
+      dismissWelcome: () => update((p) => ({ ...p, welcomed: true }), 0),
       recordPlay: (r) => update((p) => ({ ...p, recent: [{ ...r, at: Date.now() }, ...p.recent.filter((x) => x.trackId !== r.trackId)].slice(0, 30) })),
     }),
     [prefs, update, ready],

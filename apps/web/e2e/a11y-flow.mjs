@@ -57,6 +57,11 @@ await page.getByLabel(/stored this recovery key/).check({ timeout: 30000 });
 await check('recovery key step');
 await page.getByLabel(/I understand/).check();
 await page.getByRole('button', { name: 'Create account' }).click();
+await page.getByRole('dialog', { name: 'Welcome to அறை' }).waitFor({ timeout: 15000 });
+await check('first-run guide');
+await page.getByRole('button', { name: 'Next' }).click();
+await check('guide spotlight step');
+await page.getByRole('button', { name: 'Skip' }).click();
 await page.getByRole('heading', { name: /Your space is quiet/ }).waitFor();
 
 await each('library (empty)', async () => { await page.goto(`${BASE}/`); await page.getByRole('heading', { name: /Your space is quiet/ }).waitFor(); });

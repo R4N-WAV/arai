@@ -30,15 +30,31 @@ await page.getByRole('button', { name: 'Continue' }).click();
 await page.getByLabel(/stored this recovery key/).check({ timeout: 30000 });
 await page.getByLabel(/I understand/).check();
 await page.getByRole('button', { name: 'Create account' }).click();
-await page.getByRole('heading', { name: 'Welcome to அறை' }).waitFor();
+const guide = page.getByRole('dialog', { name: 'Welcome to அறை' });
+await guide.waitFor({ timeout: 15000 });
 if (page.viewportSize().width < (await page.evaluate(() => document.documentElement.scrollWidth))) throw new Error('horizontal overflow on the phone');
-step('first-run guide shows on a new account (phone width, no overflow)');
-await page.getByRole('button', { name: 'Got it' }).click();
+step('the guide opens over the app the first time an account enters');
+let steps = 1;
+while (await page.getByRole('button', { name: 'Next' }).count()) {
+  await page.getByRole('button', { name: 'Next' }).click();
+  steps++;
+  if (steps > 3 && (await page.locator('.guide-spot').count()) === 0 && steps < 7) {
+    /* text-only steps have no spotlight */
+  }
+}
+await page.getByRole('button', { name: 'Done' }).click();
+if (await page.locator('.guide').count()) throw new Error('guide did not close');
+step(`walked through all ${steps} steps (spotlights on the real controls)`);
 await page.waitForTimeout(1500); // encrypted prefs save
 await page.reload();
 await page.getByRole('heading', { name: /Your space is quiet/ }).waitFor();
-if (await page.getByRole('heading', { name: 'Welcome to அறை' }).count()) throw new Error('guide came back after dismissal');
-step('dismissing the guide sticks (synced in encrypted preferences)');
+await page.waitForTimeout(1500);
+if (await page.locator('.guide').count()) throw new Error('guide came back after it was finished');
+step('it does not come back by itself (synced in encrypted preferences)');
+await page.getByRole('button', { name: 'Help: open the guide' }).first().click();
+await page.getByRole('dialog', { name: 'Welcome to அறை' }).waitFor();
+await page.keyboard.press('Escape');
+step('the Help button opens the guide again');
 
 await page.locator('h2').first().click();
 await page.keyboard.press('?');

@@ -38,6 +38,7 @@ await page.getByRole('button', { name: 'Continue' }).click();
 await page.getByLabel(/stored this recovery key/).check({ timeout: 30000 });
 await page.getByLabel(/I understand/).check();
 await page.getByRole('button', { name: 'Create account' }).click();
+await page.getByRole('button', { name: 'Skip' }).click({ timeout: 15000 }); // first-run guide
 for (const name of ['Alpha Room', 'Beta Tapes']) {
   await page.getByRole('link', { name: 'New project' }).first().click();
   await page.getByRole('textbox', { name: 'Name' }).fill(name);

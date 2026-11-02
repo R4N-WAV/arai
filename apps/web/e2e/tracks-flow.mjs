@@ -53,6 +53,7 @@ await page.getByRole('button', { name: 'Continue' }).click();
 await page.getByLabel(/stored this recovery key/).check({ timeout: 30000 });
 await page.getByLabel(/I understand/).check();
 await page.getByRole('button', { name: 'Create account' }).click();
+await page.getByRole('button', { name: 'Skip' }).click({ timeout: 15000 }); // first-run guide
 await page.getByRole('link', { name: 'New project' }).click();
 await page.getByRole('textbox', { name: 'Name' }).fill('Night Sessions');
 await page.getByLabel('Brick').check({ force: true });

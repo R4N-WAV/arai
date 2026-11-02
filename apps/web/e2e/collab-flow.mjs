@@ -49,6 +49,7 @@ async function register(page, user) {
   await page.getByLabel(/stored this recovery key/).check({ timeout: 30000 });
   await page.getByLabel(/I understand/).check();
   await page.getByRole('button', { name: 'Create account' }).click();
+  await page.getByRole('button', { name: 'Skip' }).click({ timeout: 15000 }); // first-run guide
   await page.getByRole('heading', { name: /Library|Your space is quiet/ }).first().waitFor();
 }
 const shot = async (page, name) => shots && (await page.screenshot({ path: `${shots}/${name}.png`, fullPage: true }));

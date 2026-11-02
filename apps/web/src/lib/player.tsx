@@ -2,6 +2,30 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import type { Project } from './projects';
 import { prefetch, streamUrl } from './stream';
 import { browserPlaysAiff } from './aiff';
+import { artUrl } from './art';
+
+const artCache = new Map<string, string>();
+/** Square 512 px JPEG data URL of a project's artwork, or null. */
+async function lockScreenArt(p: Project): Promise<string | null> {
+  if (!p.art) return null;
+  const k = `${p.id}:${p.art.at}`;
+  const hit = artCache.get(k);
+  if (hit) return hit;
+  const url = await artUrl(p).catch(() => null);
+  if (!url) return null;
+  try {
+    const bmp = await createImageBitmap(await (await fetch(url)).blob());
+    const c = document.createElement('canvas');
+    c.width = c.height = 512;
+    c.getContext('2d')!.drawImage(bmp, 0, 0, 512, 512);
+    bmp.close();
+    const data = c.toDataURL('image/jpeg', 0.85);
+    artCache.set(k, data);
+    return data;
+  } catch {
+    return null;
+  }
+}
 import { audioUrl, decodeWave, type Track, type TrackVersion, type WaveData } from './tracks';
 
 export interface QueueItem {
@@ -259,7 +283,14 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   // Operating-system media keys, lock screen and headphone buttons.
   useEffect(() => {
     if (!('mediaSession' in navigator) || !item) return;
-    navigator.mediaSession.metadata = new MediaMetadata({ title: item.track.title, artist: item.project.meta?.name ?? 'Arai', album: `Version ${item.version.number}` });
+    const meta = { title: item.track.title, artist: item.project.meta?.name ?? 'Arai', album: `Version ${item.version.number}` };
+    navigator.mediaSession.metadata = new MediaMetadata(meta);
+    // Lock screen / Now Playing: the project's artwork (decrypted here, re-encoded as a small JPEG
+    // data URL, which every platform's media controls accept).
+    let alive = true;
+    void lockScreenArt(item.project).then((art) => {
+      if (alive && art) navigator.mediaSession.metadata = new MediaMetadata({ ...meta, artwork: [{ src: art, sizes: '512x512', type: 'image/jpeg' }] });
+    });
     const el = audio.current;
     const set = (a: MediaSessionAction, h: MediaSessionActionHandler | null) => {
       try {
@@ -275,6 +306,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     set('seekto', (d) => el && d.seekTime != null && (el.currentTime = d.seekTime));
     set('seekbackward', () => el && (el.currentTime = Math.max(0, el.currentTime - 10)));
     set('seekforward', () => el && (el.currentTime = el.currentTime + 10));
+    return () => {
+      alive = false;
+    };
   }, [item, index, queue.length, go]);
 
   useEffect(() => {

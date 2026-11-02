@@ -41,6 +41,7 @@ if (!(await create.isDisabled())) throw new Error('create enabled before acknowl
 await page.getByLabel(/stored this recovery key/).check();
 await page.getByLabel(/I understand/).check();
 await create.click();
+await page.getByRole('button', { name: 'Skip' }).click({ timeout: 15000 }); // first-run guide
 await page.getByRole('heading', { name: 'Library' }).waitFor();
 step('account created and signed in');
 

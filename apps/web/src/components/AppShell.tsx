@@ -7,6 +7,7 @@ import { useRealtime } from '../lib/messages';
 import { useLibrary } from '../lib/library';
 import { setBadge } from '../lib/push';
 import { ShortcutsDialog } from './Shortcuts';
+import { Guide } from './Guide';
 import { HomeLink } from './Logo';
 import { PlayerBar } from './PlayerBar';
 import { usePlayer } from '../lib/player';
@@ -67,7 +68,36 @@ function useBottomChrome(active: unknown) {
 export function AppShellWith({ children }: { children: ReactNode }) {
   const { user, signOut } = useSession();
   const { item } = usePlayer();
-  const { recordPlay } = useLibrary();
+  const { recordPlay, prefs, ready, dismissWelcome } = useLibrary();
+  const [guide, setGuide] = useState(false);
+  // First time someone enters with an account: show the guide once.
+  const seenKey = `arai.guide-seen.${user?.id ?? ''}`;
+  const seenHere = () => {
+    try {
+      return localStorage.getItem(seenKey) === '1';
+    } catch {
+      return false;
+    }
+  };
+  useEffect(() => {
+    if (ready && !prefs.welcomed && !seenHere()) setGuide(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, prefs.welcomed]);
+  const closeGuide = () => {
+    setGuide(false);
+    try {
+      localStorage.setItem(seenKey, '1');
+    } catch {
+      /* storage blocked: the synced preference still records it */
+    }
+    if (!prefs.welcomed) dismissWelcome();
+  };
+  const helpBtn = (cls: string) => (
+    <button type="button" className={cls} aria-label="Help: open the guide" onClick={() => setGuide(true)}>
+      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><circle cx="12" cy="12" r="8.5" /><path d="M9.6 9.4a2.5 2.5 0 1 1 3.6 2.3c-.8.4-1.2 1-1.2 1.8v.3" /><path d="M12 16.8h.01" /></svg>
+      {cls.includes('nav-link') && <span>Help</span>}
+    </button>
+  );
   const playedId = item?.track.id;
   useEffect(() => {
     if (item) recordPlay({ projectId: item.project.id, trackId: item.track.id, title: item.track.title });
@@ -112,7 +142,7 @@ export function AppShellWith({ children }: { children: ReactNode }) {
       <a className="skip-link" href="#main">Skip to content</a>
       <nav className="sidebar" aria-label="Main">
         <HomeLink />
-        <div className="nav-group">{links}{bell('nav-link')}</div>
+        <div className="nav-group">{links}{bell('nav-link')}{helpBtn('nav-link help-btn')}</div>
         {projects && projects.length > 0 && (
           <div className="nav-projects">
             <p className="nav-heading">Your projects</p>
@@ -144,6 +174,7 @@ export function AppShellWith({ children }: { children: ReactNode }) {
             {isTop && <HomeLink />}
           </span>
           <span className="form-actions">
+            {helpBtn('icon-btn help-btn')}
             {bell('icon-btn bell')}
             <Link to={`/u/${user?.username ?? ''}`} className="mobile-avatar" aria-label="Your profile"><Avatar profile={me} size={32} /></Link>
             <button type="button" className="btn btn-ghost btn-sm" onClick={() => void signOut()}>Sign out</button>
@@ -161,6 +192,7 @@ export function AppShellWith({ children }: { children: ReactNode }) {
         </div>
       )}
       <ShortcutsDialog />
+      <Guide open={guide} onClose={closeGuide} />
       <PlayerBar />
       <nav className="tabbar" aria-label="Main">{links}</nav>
     </div>

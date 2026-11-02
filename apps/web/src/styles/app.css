@@ -536,8 +536,9 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 body { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
 /* Status bar overlays the page in standalone mode: keep content below it. */
 /* Solid, crisp top bar (no backdrop blur: iOS smears it and it costs frames while scrolling); content fades softly under its edge. */
-.mobile-bar { padding-top: max(var(--s-3), env(safe-area-inset-top)); position: sticky; top: 0; z-index: 15; background: var(--void); }
-.mobile-bar::after { content: ""; position: absolute; left: 0; right: 0; top: 100%; height: 20px; background: linear-gradient(180deg, var(--void), rgb(8 8 10 / 0)); pointer-events: none; }
+.mobile-bar { padding-top: max(var(--s-3), env(safe-area-inset-top)); position: sticky; top: 0; z-index: 15; background: var(--void); border-bottom: 1px solid var(--line); }
+/* Public pages get the same solid top edge on phones. */
+@media (max-width: 1023px) { .public-bar { position: sticky; top: 0; z-index: 15; background: var(--void); border-bottom: 1px solid var(--line); } }
 .auth, .public-bar { padding-top: max(var(--s-5), env(safe-area-inset-top)); }
 .content, .public-bar, .mobile-bar { padding-left: max(var(--s-4), env(safe-area-inset-left)); padding-right: max(var(--s-4), env(safe-area-inset-right)); }
 @media (min-width: 1024px) { .content { padding-left: clamp(var(--s-5), 4vw, var(--s-8)); padding-right: clamp(var(--s-5), 4vw, var(--s-8)); } }
@@ -774,3 +775,20 @@ kbd { display: inline-block; min-width: 1.8em; padding: 1px 6px; margin-right: 4
 .welcome-steps { padding-left: 1.2em; display: grid; gap: var(--s-3); margin: 0 0 var(--s-4); color: var(--text-2); line-height: 1.55; }
 .welcome-steps strong { color: var(--text); }
 .settings-links { display: flex; gap: var(--s-4); flex-wrap: wrap; }
+
+/* ---------- guide overlay ---------- */
+.guide { position: fixed; inset: 0; z-index: 60; }
+.guide-scrim { position: absolute; inset: 0; background: rgb(4 4 6 / 0.55); animation: fade 0.25s var(--ease) both; }
+.guide-spot { position: fixed; border-radius: 12px; box-shadow: 0 0 0 2px var(--text), 0 0 0 9999px rgb(4 4 6 / 0.35); pointer-events: none; transition: all 0.3s var(--ease); }
+.guide-card { position: fixed; left: 50%; transform: translateX(-50%); width: min(440px, calc(100vw - 32px)); padding: var(--s-5); border-radius: var(--r-md); background: #141318; border: 1px solid var(--line-strong); box-shadow: 0 24px 60px -20px rgb(0 0 0 / 0.9); animation: guide-in 0.3s var(--ease) both; }
+.guide-card.centred { top: 50%; transform: translate(-50%, -50%); animation-name: guide-in-c; }
+@keyframes guide-in { from { opacity: 0; transform: translate(-50%, 10px); } to { opacity: 1; transform: translate(-50%, 0); } }
+@keyframes guide-in-c { from { opacity: 0; transform: translate(-50%, calc(-50% + 10px)); } to { opacity: 1; transform: translate(-50%, -50%); } }
+.guide-card h2 { font: 600 var(--fs-xl, 1.4rem)/1.2 var(--font-display); margin: 4px 0 var(--s-2); }
+.guide-card p { color: var(--text-2); line-height: 1.55; }
+.guide-count { margin: 0; }
+.guide-dots { display: flex; gap: 6px; margin: var(--s-4) 0; }
+.guide-dots span { width: 6px; height: 6px; border-radius: 50%; background: var(--line-strong); }
+.guide-dots span.on { background: var(--text); }
+.nav-group .help-btn { background: transparent; border: 0; font: inherit; color: inherit; cursor: pointer; width: 100%; text-align: left; }
+.help-btn svg { width: 20px; height: 20px; }
