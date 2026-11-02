@@ -54,7 +54,6 @@ function Invitations() {
 
 export function Library() {
   const { projects, error } = useProjects();
-  const [filter, setFilter] = useState<'all' | 'private' | 'public'>('all');
 
   if (projects === null) return error ? <Notice kind="error">{error}</Notice> : <p className="muted" role="status">Loading your space…</p>;
 
