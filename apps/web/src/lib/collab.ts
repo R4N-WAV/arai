@@ -8,7 +8,7 @@ import { createGrant, deriveShareKeys, fromBase64Url, newShareSecret, openJson, 
 import type { CommentBody, CommentDto, InviteLinkDto, InvitePayload, MemberDto, ShareDto, SharePayload, UserKeysDto } from '@arai/shared';
 import { api } from './api';
 import { keyFor, newProjectId as newId, projectKey, type Project } from './projects';
-import { fileKeyOf, type Track } from './tracks';
+import { fileKeyOf, loadTracks, type Track } from './tracks';
 import { artDataUrl } from './art';
 
 // ---- people -------------------------------------------------------------------
@@ -155,10 +155,14 @@ export function shareUrl(linkId: string, secret: string): string {
 }
 
 /** What a link holder may play: the current version of each track in scope. */
+const playable = (t: Track) => Boolean(t.current && t.current.meta);
+/** Largest payload (as JSON) that still fits one request once sealed and encoded. */
+const MAX_PAYLOAD_JSON = 700_000;
+const jsonBytes = (v: unknown) => new TextEncoder().encode(JSON.stringify(v)).length;
+
 async function buildPayload(p: Project, tracks: Track[]): Promise<{ payload: SharePayload; files: Array<{ fileId: string; versionId: string }> }> {
-  const playable = tracks.filter((t) => t.current && t.current.meta);
   const items = await Promise.all(
-    playable.map(async (t) => {
+    tracks.filter(playable).map(async (t) => {
       const v = t.current!;
       return {
         title: t.title,
@@ -170,10 +174,20 @@ async function buildPayload(p: Project, tracks: Track[]): Promise<{ payload: Sha
       };
     }),
   );
-  return {
-    payload: { project: { name: p.meta?.name ?? 'Project', color: p.meta?.color ?? '#8a8f98', description: p.meta?.description ?? '', art: await artDataUrl(p).catch(() => null) }, tracks: items },
-    files: items.map((i) => ({ fileId: i.file.id, versionId: i.versionId })),
+  const payload: SharePayload = { project: { name: p.meta?.name ?? 'Project', color: p.meta?.color ?? '#8a8f98', description: p.meta?.description ?? '', art: await artDataUrl(p).catch(() => null) }, tracks: items };
+  // A big album must still be shareable: shed the decorative parts (waveform
+  // detail, then waveforms, then the cover) before giving up on the audio.
+  const slim = (drop: (m: Record<string, unknown>) => void) => {
+    payload.tracks = payload.tracks.map((i) => {
+      const meta = { ...(i.meta as Record<string, unknown>) };
+      drop(meta);
+      return { ...i, meta };
+    });
   };
+  if (jsonBytes(payload) > MAX_PAYLOAD_JSON) slim((m) => (m.rms = null));
+  if (jsonBytes(payload) > MAX_PAYLOAD_JSON) slim((m) => (m.peaks = null));
+  if (jsonBytes(payload) > MAX_PAYLOAD_JSON) payload.project.art = null;
+  return { payload, files: items.map((i) => ({ fileId: i.file.id, versionId: i.versionId })) };
 }
 
 export interface ShareOptions {
@@ -221,26 +235,59 @@ export async function listShares(p: Project): Promise<Share[]> {
 
 export const revokeShare = (p: Project, linkId: string) => api('DELETE', `/projects/${p.id}/shares/${linkId}`);
 
-/** Re-encrypts every live link's payload after the tracks changed. */
-export async function syncShares(p: Project, tracks: Track[]): Promise<void> {
-  if (p.role === 'listener' || !p.meta) return;
+const PUBLIC_LINK: ShareOptions = { trackId: null, password: '', expiresInDays: null, allowDownload: false, allowComments: false };
+const syncQueue = new Map<string, Promise<void>>();
+
+/**
+ * Brings a project's links in line with its tracks: a public project gets its
+ * listening link if it has none (whatever way it became public), and links
+ * are re-encrypted when they serve other versions than the current ones, or
+ * always with `force` (after a rename, new artwork and the like, which the
+ * server cannot see). Runs one at a time per project so writes stay in order.
+ */
+export function syncSharing(p: Project, tracks: Track[], force = false): Promise<void> {
+  const next = (syncQueue.get(p.id) ?? Promise.resolve()).catch(() => undefined).then(() => syncNow(p, tracks, force));
+  syncQueue.set(p.id, next);
+  return next;
+}
+
+async function syncNow(p: Project, tracks: Track[], force: boolean): Promise<void> {
+  if (p.role === 'listener' || !p.meta || !projectKey(p)) return;
   const { shares } = await api<{ shares: ShareDto[] }>('GET', `/projects/${p.id}/shares`);
+  // Created with the first playable track: a public project with nothing in it has nothing to open.
+  if (p.visibility === 'public' && (p.role === 'admin' || p.role === 'owner') && tracks.some(playable) && !shares.some((s) => s.isPublic)) {
+    await createShare(p, tracks, PUBLIC_LINK, true);
+  }
   for (const s of shares) {
+    const scope = s.trackId ? tracks.filter((t) => t.id === s.trackId) : tracks;
+    const want = scope.filter(playable).map((t) => t.current!.id);
+    const have = s.versionIds ?? [];
+    if (!force && want.length === have.length && want.every((id) => have.includes(id))) continue;
     const k = await linkKeyFromSecret(p.id, s.id, s.encSecret, s.keyVersion);
     if (!k) continue;
-    const scope = s.trackId ? tracks.filter((t) => t.id === s.trackId) : tracks;
     const { payload, files } = await buildPayload(p, scope);
     await api('PUT', `/projects/${p.id}/shares/${s.id}`, { encPayload: await toBase64Url(await sealJson(k.key, payload, payloadCtx(s.id))), files });
   }
 }
 
-/** Public projects get one link whose secret is published, so anyone can listen. */
-export async function ensurePublicListening(p: Project, tracks: Track[]): Promise<void> {
-  if (p.visibility !== 'public' || (p.role !== 'admin' && p.role !== 'owner')) return;
-  const { shares } = await api<{ shares: ShareDto[] }>('GET', `/projects/${p.id}/shares`);
-  if (shares.some((s) => s.isPublic)) return;
-  await createShare(p, tracks, { trackId: null, password: '', expiresInDays: null, allowDownload: false, allowComments: false }, true);
+const repaired = new Set<string>();
+/**
+ * Public projects that never got their listening link (made public before
+ * Arai created it by itself) are shown on profiles but cannot be played.
+ * Whenever their owner or an admin has Arai open, publish them quietly.
+ */
+export function repairPublicListening(projects: Project[]): void {
+  for (const p of projects) {
+    if (p.visibility !== 'public' || p.listenable || !p.meta || (p.role !== 'admin' && p.role !== 'owner') || repaired.has(p.id)) continue;
+    repaired.add(p.id);
+    void loadTracks(p)
+      .then((tracks) => syncSharing(p, tracks))
+      .catch(() => repaired.delete(p.id));
+  }
 }
+
+/** Public projects get one link whose secret is published, so anyone can listen. */
+export const ensurePublicListening = (p: Project, tracks: Track[]) => syncSharing(p, tracks);
 
 // ---- opening a link (anyone) ----------------------------------------------------------
 

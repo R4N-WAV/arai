@@ -6,6 +6,7 @@ import { purgeFiles } from './tracks.js';
 import { reindexProject } from './social.js';
 import { inspectImage } from '../lib/images.js';
 import { rateLimit } from '../lib/ratelimit.js';
+import { announceProject } from '../lib/realtime.js';
 import { requireUser, type AuthedBindings } from '../lib/session.js';
 import { parseBody } from '../lib/validate.js';
 
@@ -26,6 +27,7 @@ interface Row {
   art_key_version: number | null;
   accepted_at: number | null;
   invited_by: string | null;
+  listenable: number;
   created_at: number;
   updated_at: number;
 }
@@ -41,7 +43,8 @@ interface KeyRow {
 // Membership-scoped query: a project is only ever returned to its members.
 const SELECT = `SELECT p.id, m.role, p.visibility, p.key_version, p.enc_meta, p.public_meta, p.rotation_due, p.created_at, p.updated_at,
     (SELECT updated_at FROM project_art WHERE project_id = p.id) AS art_at, (SELECT key_version FROM project_art WHERE project_id = p.id) AS art_key_version,
-    m.accepted_at, (SELECT u.username FROM users u WHERE u.id = m.added_by) AS invited_by
+    m.accepted_at, (SELECT u.username FROM users u WHERE u.id = m.added_by) AS invited_by,
+    EXISTS (SELECT 1 FROM share_links l WHERE l.project_id = p.id AND l.is_public = 1 AND l.revoked_at IS NULL) AS listenable
   FROM project_members m
   JOIN projects p ON p.id = m.project_id AND p.deleted_at IS NULL
   WHERE m.user_id = ? AND m.revoked_at IS NULL`;
@@ -51,13 +54,15 @@ export const ACCEPTED = ' AND m.accepted_at IS NOT NULL';
 export async function projectDtos(db: D1Database, userId: string, rows: Row[]): Promise<ProjectDto[]> {
   if (rows.length === 0) return [];
   const keys = new Map<string, KeyRow[]>();
-  // D1 caps bound parameters; fetch keyrings in slices.
+  // D1 caps bound parameters; fetch keyrings in slices. The granter's signing key is looked up even if
+  // their account was deleted since (keys are then revoked): a grant they signed while a member must
+  // keep opening, or deleting an account would lock everyone they invited out of the project.
   for (let i = 0; i < rows.length; i += 80) {
     const ids = rows.slice(i, i + 80).map((r) => r.id);
     const { results } = await db
       .prepare(
         `SELECT k.project_id, k.key_version, k.wrapped_key, k.grant_sig, k.granted_by,
-           (SELECT uk.ed25519_pub FROM user_keys uk WHERE uk.user_id = k.granted_by AND uk.revoked_at IS NULL ORDER BY uk.created_at DESC LIMIT 1) AS granter_sign_key
+           (SELECT uk.ed25519_pub FROM user_keys uk WHERE uk.user_id = k.granted_by ORDER BY uk.created_at DESC LIMIT 1) AS granter_sign_key
          FROM project_keys k WHERE k.user_id = ? AND k.project_id IN (${ids.map(() => '?').join(',')}) ORDER BY k.key_version`,
       )
       .bind(userId, ...ids)
@@ -76,6 +81,7 @@ export async function projectDtos(db: D1Database, userId: string, rows: Row[]): 
       .map((k) => ({ keyVersion: k.key_version, wrappedKey: toB64(k.wrapped_key), signature: toB64(k.grant_sig), grantedBy: k.granted_by, granterSignKey: toB64(k.granter_sign_key!) })),
     rotationDue: r.rotation_due === 1,
     art: r.art_at && r.art_key_version ? { at: r.art_at, keyVersion: r.art_key_version } : null,
+    listenable: r.listenable === 1,
     ...(r.accepted_at === null && r.invited_by ? { invitedBy: r.invited_by } : {}),
     createdAt: r.created_at,
     updatedAt: r.updated_at,
@@ -174,6 +180,7 @@ projects.patch('/projects/:id', async (c) => {
     ]);
   }
   await reindexProject(c.env.DB, id);
+  announceProject(c, id, 'details');
   return c.json({ project: await one(c.env.DB, userId, id) });
 });
 
@@ -193,6 +200,7 @@ projects.delete('/projects/:id', async (c) => {
   await reindexProject(c.env.DB, id);
   const files = await c.env.DB.prepare("SELECT id FROM files WHERE project_id = ? AND status != 'deleted'").bind(id).all<{ id: string }>();
   await purgeFiles(c.env, c.executionCtx, id, files.results.map((f) => f.id));
+  announceProject(c, id, 'details');
   return c.json({ ok: true });
 });
 
@@ -221,6 +229,7 @@ projects.put('/projects/:id/art', async (c) => {
     ).bind(id, kv, data, now),
     c.env.DB.prepare('UPDATE projects SET updated_at = ? WHERE id = ?').bind(now, id),
   ]);
+  announceProject(c, id, 'details');
   return c.json({ art: { at: now, keyVersion: kv } });
 });
 
@@ -251,6 +260,7 @@ projects.delete('/projects/:id/art', async (c) => {
   const id = c.req.param('id');
   if (!(await requireProjectRole(c.env.DB, id, c.get('session').user_id, 'editor'))) return c.json(notFound, 404);
   await c.env.DB.prepare('DELETE FROM project_art WHERE project_id = ?').bind(id).run();
+  announceProject(c, id, 'details');
   return c.json({ ok: true });
 });
 

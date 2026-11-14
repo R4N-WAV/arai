@@ -9,6 +9,7 @@ import { ReportDialog } from '../components/ReportDialog';
 import { Notice } from '../components/Unavailable';
 import { api, errorMessage } from '../lib/api';
 import { lookupUser } from '../lib/collab';
+import { useResume } from '../lib/live';
 import {
   addToGroup,
   attachmentUrl,
@@ -194,6 +195,8 @@ function Thread({ c, onChanged }: { c: Conversation; onChanged: () => void }) {
     setItems(null);
     void load();
   }, [load, c.id, c.keyVersion, c.myStatus]);
+  // Messages sent while this tab was asleep or offline never arrived as events: fetch them on return.
+  useResume(() => void load());
   useEffect(() => {
     api<Capabilities>('GET', '/config').then(setCaps).catch(() => undefined);
   }, []);
@@ -206,7 +209,7 @@ function Thread({ c, onChanged }: { c: Conversation; onChanged: () => void }) {
   useEffect(
     () =>
       realtime.subscribe(async (e: RealtimeEvent) => {
-        if (e.conversationId !== c.id) return;
+        if (e.type === 'project' || e.conversationId !== c.id) return;
         if (e.type === 'typing') setTyping((t) => ({ ...t, [e.userId]: Date.now() }));
         else if (e.type === 'read' || e.type === 'conversation') onChanged();
         else {
@@ -487,6 +490,7 @@ export function Messages() {
     void load();
   }, [load]);
   useEffect(() => realtime.subscribe((e) => (e.type === 'message' || e.type === 'conversation' || e.type === 'read') && void load()), [realtime, load]);
+  useResume(() => void load());
 
   // A conversation not in the list yet (e.g. a project chat with no messages).
   useEffect(() => {

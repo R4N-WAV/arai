@@ -79,6 +79,29 @@ const raw = await page.evaluate(() => fetch('/api/account/prefs').then((r) => r.
 if (raw.includes('Live set') || raw.includes('Moonlit')) throw new Error('preferences reached the server unencrypted');
 step('preferences are stored encrypted');
 
+// A second device changes the library; the first one (still open, holding an older copy) must not undo it.
+const page2 = await (await browser.newContext({ viewport: { width: 1280, height: 860 } })).newPage();
+await page2.goto(`${BASE}/signin`);
+await page2.getByLabel('Username').fill(user);
+await page2.getByLabel('Password').fill(pw);
+await page2.getByRole('button', { name: 'Sign in' }).click();
+await page2.getByRole('heading', { name: 'Library' }).waitFor({ timeout: 30000 });
+await page2.getByRole('button', { name: 'Live set' }).waitFor();
+await page2.getByRole('button', { name: 'Folders…' }).click();
+await page2.getByLabel('New folder name').fill('Demos');
+await page2.getByRole('button', { name: 'Add folder' }).click();
+await page2.keyboard.press('Escape');
+await page2.waitForTimeout(1500);
+await page.getByRole('button', { name: 'All', exact: true }).click();
+await page.getByRole('button', { name: 'Pin Beta Tapes' }).click(); // the first device never saw “Demos”
+await page.waitForTimeout(1500);
+await page2.reload();
+await page2.getByRole('heading', { name: 'Library' }).waitFor();
+await page2.getByRole('button', { name: 'Demos' }).waitFor({ timeout: 10000 });
+await page2.getByRole('button', { name: 'Unpin Beta Tapes' }).waitFor();
+await page.getByRole('button', { name: 'Demos' }).waitFor({ timeout: 10000 }); // and the first device learned of it when it saved
+step('changes from two devices are merged, not overwritten');
+
 await browser.close();
 if (problems.length) {
   console.error(problems.join('\n'));

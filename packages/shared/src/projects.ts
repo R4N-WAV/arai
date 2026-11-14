@@ -50,6 +50,8 @@ export interface ProjectDto {
   rotationDue: boolean;
   /** Encrypted cover artwork, if any (fetch /projects/:id/art). */
   art: { at: number; keyVersion: number } | null;
+  /** A public project that has its listening link, i.e. anyone can actually play it. */
+  listenable: boolean;
   /** Set while this is an invitation that has not been accepted. */
   invitedBy?: string;
   createdAt: number;

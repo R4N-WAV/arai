@@ -90,6 +90,8 @@ export interface ShareDto {
   encSecret: string;
   keyVersion: number;
   createdAt: number;
+  /** The versions this link currently serves (lets members spot a link that fell behind). */
+  versionIds: string[];
 }
 /** Decrypted share payload. */
 export interface SharePayload {
@@ -194,7 +196,14 @@ export type RealtimeEvent =
   | { type: 'edit' | 'delete' | 'react'; conversationId: string; message: MessageDto }
   | { type: 'typing'; conversationId: string; userId: string }
   | { type: 'read'; conversationId: string; userId: string; at: number }
-  | { type: 'conversation'; conversationId: string };
+  | { type: 'conversation'; conversationId: string }
+  /**
+   * Something changed in a project you belong to (or were just invited to or
+   * removed from). Carries ids only; clients refetch and decrypt.
+   * `members`: invitations, roles, removals, key rotation. `details`: name,
+   * artwork, visibility, deletion. `tracks`: tracks and versions. `comments`.
+   */
+  | { type: 'project'; projectId: string; what: 'members' | 'details' | 'tracks' | 'comments'; versionId?: string };
 
 // ---- invite links -----------------------------------------------------------------
 export const createInviteLinkRequest = z.object({

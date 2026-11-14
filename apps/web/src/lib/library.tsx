@@ -7,6 +7,7 @@
 import { deriveSubkey, fromBase64Url, openJson, sealJson, toBase64Url } from '@arai/crypto';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { api } from './api';
+import { useResume } from './live';
 import { newProjectId } from './projects';
 import { useSession } from './session';
 
@@ -67,48 +68,79 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
   const [prefs, setPrefs] = useState<LibraryPrefs>(EMPTY);
   const [ready, setReady] = useState(false);
   const key = useRef<Uint8Array | null>(null);
-  const loaded = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  /** Changes made here that the server does not have yet, in order. */
+  const pending = useRef<Array<(p: LibraryPrefs) => LibraryPrefs>>([]);
+  const flushing = useRef(false);
+  const retry = useRef<() => void>(() => undefined);
+
+  /** What the server holds right now. Throws when it cannot be reached (never "empty" by mistake). */
+  const fetchStored = useCallback(async (): Promise<LibraryPrefs> => {
+    const r = await api<{ prefs: { encData: string } | null }>('GET', '/account/prefs');
+    if (!r.prefs || !key.current) return EMPTY;
+    try {
+      return clean(await openJson(key.current, await fromBase64Url(r.prefs.encData), CTX));
+    } catch {
+      return EMPTY; // unreadable (e.g. a different account key): start fresh
+    }
+  }, []);
+
+  /**
+   * Saving re-reads the stored preferences and applies only the changes made
+   * here on top. Writing back the copy this tab loaded hours ago would undo
+   * pins and folders made on another device, and a failed first load would
+   * replace everything with an empty library.
+   */
+  const flush = useCallback(async () => {
+    if (flushing.current || !key.current) return;
+    flushing.current = true;
+    try {
+      const todo = pending.current.slice();
+      const next = todo.reduce((p, fn) => clean(fn(p)), await fetchStored());
+      if (todo.length) await api('PUT', '/account/prefs', { encData: await toBase64Url(await sealJson(key.current, next, CTX)) });
+      pending.current = pending.current.slice(todo.length);
+      // Show the merged result, with anything changed meanwhile still applied on top.
+      setPrefs(pending.current.reduce((p, fn) => clean(fn(p)), next));
+      setReady(true);
+    } catch {
+      /* offline: changes stay queued and go out with the next save or when the tab is used again */
+    } finally {
+      flushing.current = false;
+      if (pending.current.length) {
+        clearTimeout(timer.current);
+        timer.current = setTimeout(() => retry.current(), 15_000);
+      }
+    }
+  }, [fetchStored]);
+  useEffect(() => {
+    retry.current = () => void flush();
+  }, [flush]);
 
   useEffect(() => {
     if (!keys) return;
     let alive = true;
     void (async () => {
       key.current = await deriveSubkey(keys.ask, 'library-prefs');
-      const r = await api<{ prefs: { encData: string } | null }>('GET', '/account/prefs').catch(() => ({ prefs: null }));
       if (!alive) return;
-      if (r.prefs) {
-        try {
-          setPrefs(clean(await openJson(key.current, await fromBase64Url(r.prefs.encData), CTX)));
-        } catch {
-          /* unreadable (e.g. a different account key): start fresh */
-        }
-      }
-      loaded.current = true;
-      setReady(true);
+      await flush();
+      // Could not load: let the app in anyway; nothing is saved until a load succeeds.
+      if (alive) setReady(true);
     })();
     return () => {
       alive = false;
     };
-  }, [keys]);
+  }, [keys, flush]);
+  // Pick up pins, folders and plays from other devices when this one is used again.
+  useResume(() => void flush(), 30_000);
 
-  // Save shortly after changes (batched), encrypted.
-  const save = useCallback((next: LibraryPrefs, delay = 800) => {
-    clearTimeout(timer.current);
-    timer.current = setTimeout(async () => {
-      if (!key.current || !loaded.current) return;
-      const encData = await toBase64Url(await sealJson(key.current, next, CTX));
-      await api('PUT', '/account/prefs', { encData }).catch(() => undefined);
-    }, delay);
-  }, []);
   const update = useCallback(
-    (fn: (p: LibraryPrefs) => LibraryPrefs, delay?: number) =>
-      setPrefs((prev) => {
-        const next = clean(fn(prev));
-        save(next, delay);
-        return next;
-      }),
-    [save],
+    (fn: (p: LibraryPrefs) => LibraryPrefs, delay = 800) => {
+      pending.current.push(fn);
+      setPrefs((prev) => clean(fn(prev)));
+      clearTimeout(timer.current);
+      timer.current = setTimeout(() => void flush(), delay);
+    },
+    [flush],
   );
 
   const value = useMemo<LibraryState>(

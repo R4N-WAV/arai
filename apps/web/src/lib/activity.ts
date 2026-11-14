@@ -1,10 +1,15 @@
 import type { NotificationDto } from '@arai/shared';
 import { useEffect, useState } from 'react';
 import { api } from './api';
+import { useProjectEvents, useResume } from './live';
 
 /** Unread notification count, refreshed on navigation and every minute while visible. */
 export function useUnread(dep: unknown): number {
   const [n, setN] = useState(0);
+  const [tick, setTick] = useState(0);
+  // An invitation or a comment shows on the bell as it happens, not a minute later.
+  useProjectEvents((e) => (e.what === 'members' || e.what === 'comments') && setTick((x) => x + 1), 1200);
+  useResume(() => setTick((x) => x + 1));
   useEffect(() => {
     let alive = true;
     const load = () => {
@@ -17,7 +22,7 @@ export function useUnread(dep: unknown): number {
       alive = false;
       clearInterval(t);
     };
-  }, [dep]);
+  }, [dep, tick]);
   return n;
 }
 

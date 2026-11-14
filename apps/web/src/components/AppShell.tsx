@@ -12,6 +12,7 @@ import { HomeLink } from './Logo';
 import { PlayerBar } from './PlayerBar';
 import { usePlayer } from '../lib/player';
 import { useProjects } from '../lib/projects';
+import { repairPublicListening } from '../lib/collab';
 import { useMe } from '../lib/me';
 import { Avatar } from './ProfileView';
 
@@ -128,6 +129,9 @@ export function AppShellWith({ children }: { children: ReactNode }) {
     </button>
   );
   const { projects } = useProjects();
+  useEffect(() => {
+    if (projects) repairPublicListening(projects);
+  }, [projects]);
   const { profile } = useMe();
   const me = profile ?? { username: user?.username ?? '', avatar: null, displayName: '' };
   const links = NAV.map(({ to, label, icon: Icon, end }) => (

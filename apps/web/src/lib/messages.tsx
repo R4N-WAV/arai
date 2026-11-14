@@ -248,16 +248,31 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
     let delay = 1000;
     let ping: ReturnType<typeof setInterval> | undefined;
     let retry: ReturnType<typeof setTimeout> | undefined;
+    let lastPong = Date.now();
+    let check: ReturnType<typeof setTimeout> | undefined;
     const connect = () => {
       if (stopped) return;
-      ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/api/realtime`);
-      ws.onopen = () => {
+      clearTimeout(retry);
+      const sock = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/api/realtime`);
+      ws = sock;
+      sock.onopen = () => {
+        if (ws !== sock) return;
         setConnected(true);
         delay = 1000;
-        ping = setInterval(() => ws?.readyState === WebSocket.OPEN && ws.send('ping'), 25_000);
+        lastPong = Date.now();
+        clearInterval(ping);
+        ping = setInterval(() => {
+          // Three unanswered pings: the connection is gone even though the browser has not said so.
+          if (Date.now() - lastPong > 80_000) return restart();
+          if (sock.readyState === WebSocket.OPEN) sock.send('ping');
+        }, 25_000);
+        refreshUnread();
       };
-      ws.onmessage = (ev) => {
-        if (ev.data === 'pong') return;
+      sock.onmessage = (ev) => {
+        if (ev.data === 'pong') {
+          lastPong = Date.now();
+          return;
+        }
         try {
           const e = JSON.parse(String(ev.data)) as RealtimeEvent;
           listeners.current.forEach((fn) => fn(e));
@@ -266,34 +281,63 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
           /* ignore malformed frames */
         }
       };
-      ws.onclose = () => {
+      sock.onclose = () => {
+        if (ws !== sock) return; // replaced by a newer socket
         setConnected(false);
         clearInterval(ping);
         if (!stopped) retry = setTimeout(connect, (delay = Math.min(delay * 2, 30_000)));
       };
     };
+    // Drop the current socket without waiting for the browser to notice it died.
+    const restart = () => {
+      const old = ws;
+      ws = null;
+      clearInterval(ping);
+      try {
+        old?.close();
+      } catch {
+        /* already gone */
+      }
+      setConnected(false);
+      delay = 1000;
+      connect();
+    };
+    // A phone that slept, or a laptop that changed networks, can hold a socket
+    // that looks open but is dead. On return, prove it is alive or replace it.
+    const wake = () => {
+      if (stopped || document.visibilityState !== 'visible') return;
+      if (!ws || ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING) return restart();
+      if (ws.readyState !== WebSocket.OPEN) return;
+      const asked = Date.now();
+      ws.send('ping');
+      clearTimeout(check);
+      check = setTimeout(() => !stopped && lastPong < asked && restart(), 4000);
+    };
+    document.addEventListener('visibilitychange', wake);
+    window.addEventListener('online', wake);
+    window.addEventListener('pageshow', wake);
     connect();
     refreshUnread();
     return () => {
       stopped = true;
       clearInterval(ping);
       clearTimeout(retry);
+      clearTimeout(check);
+      document.removeEventListener('visibilitychange', wake);
+      window.removeEventListener('online', wake);
+      window.removeEventListener('pageshow', wake);
       ws?.close();
     };
   }, [user, refreshUnread]);
 
-  const value = useMemo<RealtimeState>(
-    () => ({
-      subscribe: (fn) => {
-        listeners.current.add(fn);
-        return () => listeners.current.delete(fn);
-      },
-      connected,
-      unread,
-      refreshUnread,
-    }),
-    [connected, unread, refreshUnread],
-  );
+  // Stable identity: subscribers must not be torn down when the unread count changes.
+  const subscribe = useCallback((fn: Listener) => {
+    listeners.current.add(fn);
+    return () => {
+      listeners.current.delete(fn);
+    };
+  }, []);
+  const value = useMemo<RealtimeState>(() => ({ subscribe, connected, unread, refreshUnread }), [subscribe, connected, unread, refreshUnread]);
   return <RealtimeCtx.Provider value={value}>{children}</RealtimeCtx.Provider>;
 }
 

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react
 import { errorMessage } from '../lib/api';
 import { formatTime } from '../lib/audio';
 import { addComment, deleteComment, editComment, loadComments, resolveComment, type Comment } from '../lib/collab';
+import { useProjectEvents } from '../lib/live';
 import type { Project } from '../lib/projects';
 import { useSession } from '../lib/session';
 import type { TrackVersion, WaveData } from '../lib/tracks';
@@ -57,7 +58,12 @@ export function VersionComments(props: {
     }),
     [p, props.version.id, user?.id, canModerate, canResolveAll],
   );
-  return <CommentThread {...props} api={api} />;
+  // Comments other people leave (members or link guests) appear while the thread is open.
+  const [live, setLive] = useState(0);
+  useProjectEvents((e) => {
+    if (e.projectId === p.id && e.what === 'comments' && (!e.versionId || e.versionId === props.version.id)) setLive((n) => n + 1);
+  });
+  return <CommentThread {...props} api={api} reloadKey={live} />;
 }
 
 export function CommentThread({
@@ -70,8 +76,11 @@ export function CommentThread({
   onJump,
   title,
   version,
+  reloadKey = 0,
 }: {
   api: CommentsApi;
+  /** Bump to reload the thread (members get this from realtime events). */
+  reloadKey?: number;
   wave: WaveData | null;
   active: boolean;
   time: number;
@@ -104,7 +113,7 @@ export function CommentThread({
   }, [api]);
   useEffect(() => {
     void refresh();
-  }, [refresh]);
+  }, [refresh, reloadKey]);
 
   const top = (comments ?? []).filter((c) => !c.parentId && (showResolved || !c.resolved) && !(c.deleted && !(comments ?? []).some((r) => r.parentId === c.id)));
   top.sort((a, b) => (a.body?.at ?? Infinity) - (b.body?.at ?? Infinity) || a.createdAt - b.createdAt);

@@ -167,10 +167,16 @@ await a.page.locator('.track-title', { hasText: 'After Rotation' }).waitFor({ ti
 if ((await a.page.locator('.track-title', { hasText: 'Locked track' }).count()) > 0) throw new Error('a track became unreadable after rotation');
 step('after rotation, old and new tracks both decrypt');
 // The guest link keeps working and picks up the new track.
-await g.page.reload();
-await g.page.getByLabel('Password').fill('opensesame');
-await g.page.getByRole('button', { name: 'Open' }).click();
-await g.page.locator('.track-title', { hasText: 'After Rotation' }).waitFor({ timeout: 15000 });
+// (Ana's browser re-encrypts the link shortly after the upload; a link page does not update live, so look again like a visitor would.)
+for (let i = 0; ; i++) {
+  await g.page.reload();
+  await g.page.getByLabel('Password').fill('opensesame');
+  await g.page.getByRole('button', { name: 'Open' }).click();
+  await g.page.getByRole('heading', { name: 'Harbour' }).waitFor();
+  if (await g.page.locator('.track-title', { hasText: 'After Rotation' }).isVisible()) break;
+  if (i >= 15) throw new Error('the share link never picked up the new track');
+  await g.page.waitForTimeout(700);
+}
 step('the share link still works and now includes the new track');
 
 // Public listening + discovery

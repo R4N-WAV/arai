@@ -28,6 +28,7 @@ import { appendAudit } from '../lib/audit.js';
 import { fromB64, ipHmac, requireSecret, sha256, timingSafeEqual, toB64 } from '../lib/crypto.js';
 import { requireProjectRole } from '../lib/projects.js';
 import { rateLimit } from '../lib/ratelimit.js';
+import { announceProject } from '../lib/realtime.js';
 import { clientIp, requireUser, type AuthedBindings } from '../lib/session.js';
 import { parseBody } from '../lib/validate.js';
 import { ACCEPTED, PROJECT_SELECT, projectDtos, type ProjectRow } from './projects.js';
@@ -129,6 +130,7 @@ collab.post('/projects/:id/members', async (c) => {
   ]);
   await appendAudit(c.env.DB, { actorId: me, action: 'project.invite', target: id, details: { userId: body.userId, role: body.role } });
   await notify(c.env.DB, body.userId, 'invite', me, id, c.var.wake);
+  announceProject(c, id, 'members');
   return c.json({ ok: true }, 201);
 });
 
@@ -144,6 +146,7 @@ collab.patch('/projects/:id/members/:userId', async (c) => {
   if (m.role === 'owner' || ((m.role === 'admin' || body.role === 'admin') && g.role !== 'owner')) return forbidden(c);
   await c.env.DB.prepare('UPDATE project_members SET role = ? WHERE project_id = ? AND user_id = ?').bind(body.role, id, c.req.param('userId')).run();
   await appendAudit(c.env.DB, { actorId: c.get('session').user_id, action: 'project.role', target: id, details: { userId: c.req.param('userId'), role: body.role } });
+  announceProject(c, id, 'members');
   return c.json({ ok: true });
 });
 
@@ -172,6 +175,7 @@ collab.delete('/projects/:id/members/:userId', async (c) => {
     c.env.DB.prepare('UPDATE projects SET rotation_due = 1 WHERE id = ?').bind(id),
   ]);
   await appendAudit(c.env.DB, { actorId: me, action: targetId === me ? 'project.leave' : 'project.remove_member', target: id, details: { userId: targetId } });
+  announceProject(c, id, 'members', [targetId]);
   return c.json({ ok: true });
 });
 
@@ -207,6 +211,7 @@ collab.post('/projects/:id/rotate', async (c) => {
     throw e;
   }
   await appendAudit(c.env.DB, { actorId: me, action: 'project.rotate_key', target: id, details: { keyVersion: body.keyVersion } });
+  announceProject(c, id, 'members');
   return c.json({ ok: true });
 });
 
@@ -225,6 +230,7 @@ collab.post('/invites/:id/accept', async (c) => {
     .run();
   if (!res.meta.changes) return notFound(c);
   const row = await c.env.DB.prepare(`${PROJECT_SELECT}${ACCEPTED} AND p.id = ?`).bind(userId, c.req.param('id')).first<ProjectRow>();
+  announceProject(c, c.req.param('id'), 'members');
   return c.json({ project: (await projectDtos(c.env.DB, userId, [row!]))[0] });
 });
 
@@ -310,6 +316,7 @@ collab.post('/versions/:versionId/comments', async (c) => {
     throw e;
   }
   await notifyProject(c.env.DB, projectId, me, 'comment', c.var.wake);
+  announceProject(c, projectId, 'comments', [], versionId);
   const row = await c.env.DB.prepare(`${COMMENTS} WHERE c.id = ?`).bind(body.id).first<CommentRow>();
   return c.json({ comment: commentDto(row!) }, 201);
 });
@@ -343,6 +350,7 @@ collab.patch('/comments/:id', async (c) => {
   }
   await c.env.DB.prepare(`UPDATE comments SET ${sets.join(', ')} WHERE id = ?`).bind(...args, c.req.param('id')).run();
   const updated = await c.env.DB.prepare(`${COMMENTS} WHERE c.id = ?`).bind(c.req.param('id')).first<CommentRow>();
+  announceProject(c, row.project_id, 'comments', [], updated!.version_id);
   return c.json({ comment: commentDto(updated!) });
 });
 
@@ -354,6 +362,7 @@ collab.delete('/comments/:id', async (c) => {
   if (row.author_id !== c.get('session').user_id && roleRank(g.role) < roleRank('admin')) return forbidden(c);
   // The text is erased; the row stays so replies keep their place.
   await c.env.DB.prepare('UPDATE comments SET enc_body = NULL, deleted_at = ? WHERE id = ?').bind(Date.now(), c.req.param('id')).run();
+  announceProject(c, row.project_id, 'comments');
   return c.json({ ok: true });
 });
 
@@ -370,6 +379,7 @@ interface ShareRow {
   enc_secret: ArrayBuffer;
   secret_key_version: number;
   created_at: number;
+  version_ids: string | null;
 }
 const shareDto = (r: ShareRow): ShareDto => ({
   id: r.id,
@@ -382,6 +392,7 @@ const shareDto = (r: ShareRow): ShareDto => ({
   encSecret: toB64(r.enc_secret),
   keyVersion: r.secret_key_version,
   createdAt: r.created_at,
+  versionIds: r.version_ids ? r.version_ids.split(',') : [],
 });
 
 async function validFiles(db: D1Database, projectId: string, files: Array<{ fileId: string; versionId: string }>): Promise<boolean> {
@@ -400,7 +411,7 @@ collab.get('/projects/:id/shares', async (c) => {
   const g = await gate(c, id, 'editor');
   if (!g.ok) return g.res;
   const { results } = await c.env.DB.prepare(
-    'SELECT id, track_id, has_password, allow_download, allow_comments, is_public, expires_at, enc_secret, secret_key_version, created_at FROM share_links WHERE project_id = ? AND revoked_at IS NULL ORDER BY created_at DESC',
+    'SELECT id, track_id, has_password, allow_download, allow_comments, is_public, expires_at, enc_secret, secret_key_version, created_at, (SELECT group_concat(version_id) FROM share_link_files WHERE link_id = share_links.id) AS version_ids FROM share_links WHERE project_id = ? AND revoked_at IS NULL ORDER BY created_at DESC',
   )
     .bind(id)
     .all<ShareRow>();
@@ -445,7 +456,7 @@ collab.post('/projects/:id/shares', async (c) => {
     throw e;
   }
   await appendAudit(c.env.DB, { actorId: me, action: isPublic ? 'project.publish_audio' : 'share.create', target: id, details: { linkId: body.id } });
-  const row = await c.env.DB.prepare('SELECT id, track_id, has_password, allow_download, allow_comments, is_public, expires_at, enc_secret, secret_key_version, created_at FROM share_links WHERE id = ?').bind(body.id).first<ShareRow>();
+  const row = await c.env.DB.prepare('SELECT id, track_id, has_password, allow_download, allow_comments, is_public, expires_at, enc_secret, secret_key_version, created_at, (SELECT group_concat(version_id) FROM share_link_files WHERE link_id = share_links.id) AS version_ids FROM share_links WHERE id = ?').bind(body.id).first<ShareRow>();
   return c.json({ share: shareDto(row!) }, 201);
 });
 
@@ -492,8 +503,9 @@ interface LiveLink {
 async function liveLink(db: D1Database, linkId: string): Promise<LiveLink | null> {
   return db
     .prepare(
+      // A project a moderator hid stops being publicly playable (its private links to chosen people keep working).
       `SELECT l.id, l.project_id, l.token_hash, l.has_password, l.allow_download, l.allow_comments, l.enc_payload FROM share_links l JOIN projects p ON p.id = l.project_id AND p.deleted_at IS NULL
-        WHERE l.id = ? AND l.revoked_at IS NULL AND (l.expires_at IS NULL OR l.expires_at > ?)`,
+        WHERE l.id = ? AND l.revoked_at IS NULL AND (l.expires_at IS NULL OR l.expires_at > ?) AND NOT (l.is_public = 1 AND p.hidden_at IS NOT NULL)`,
     )
     .bind(linkId, Date.now())
     .first<LiveLink>();
@@ -574,6 +586,7 @@ collab.post('/share/:linkId/comments', async (c) => {
     throw e;
   }
   const row = await c.env.DB.prepare(`${COMMENTS} WHERE c.id = ?`).bind(body.id).first<CommentRow>();
+  announceProject(c, link.project_id, 'comments', [], body.versionId);
   return c.json({ comment: commentDto(row!) }, 201);
 });
 
@@ -695,6 +708,7 @@ collab.post('/join/:linkId', async (c) => {
   ]);
   await appendAudit(c.env.DB, { actorId: me, action: 'project.join_link', target: l.project_id, details: { link: l.id } });
   await notify(c.env.DB, owner!.owner_id, 'invite', me, l.project_id, c.var.wake);
+  announceProject(c, l.project_id, 'members');
   return c.json({ projectId: l.project_id });
 });
 
@@ -703,7 +717,7 @@ collab.get('/public/projects/:id', async (c) => {
   const row = await c.env.DB.prepare(
     `SELECT p.public_meta, l.id AS link_id, l.public_secret, (SELECT updated_at FROM project_art a WHERE a.project_id = p.id AND a.public_data IS NOT NULL) AS art FROM projects p
        LEFT JOIN share_links l ON l.project_id = p.id AND l.is_public = 1 AND l.revoked_at IS NULL
-      WHERE p.id = ? AND p.visibility = 'public' AND p.deleted_at IS NULL`,
+      WHERE p.id = ? AND p.visibility = 'public' AND p.deleted_at IS NULL AND p.hidden_at IS NULL`,
   )
     .bind(c.req.param('id'))
     .first<{ public_meta: string; link_id: string | null; public_secret: string | null; art: number | null }>();

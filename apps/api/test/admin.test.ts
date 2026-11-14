@@ -37,7 +37,13 @@ describe('administration', () => {
     expect(pr.target.label).toContain('Spam Tape');
     const ur = reports.find((r: any) => r.target_type === 'user');
     expect(ur.evidence).toBe('the decrypted text they sent');
+    // It has a public listening link; hiding must take that offline too, not just the listings.
+    const link = pid();
+    expect((await bad.call('POST', `/projects/${p}/shares`, { id: link, trackId: null, tokenHash: rand(32), hasPassword: false, allowDownload: false, allowComments: false, expiresAt: null, encPayload: blob(), encSecret: blob(), keyVersion: 1, files: [], publicSecret: rand(32) })).status).toBe(201);
+    expect((await new Client().call('GET', `/public/projects/${p}`)).json.link.id).toBe(link);
     expect((await mod.call('POST', `/admin/reports/${pr.id}`, { action: 'hide_project', note: 'spam' })).status).toBe(200);
+    expect((await new Client().call('GET', `/public/projects/${p}`)).status).toBe(404);
+    expect((await new Client().call('GET', `/share/${link}`)).status).toBe(404);
     expect((await new Client().call('GET', '/discover?q=spam')).json.projects).toHaveLength(0);
     expect((await new Client().call('GET', '/profiles/ad_bad')).json.profile.projects).toHaveLength(0);
 

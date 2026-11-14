@@ -3,6 +3,7 @@ import { Hono, type Context } from 'hono';
 import type { Env } from '../env.js';
 import { fromB64, toB64 } from '../lib/crypto.js';
 import { requireProjectRole } from '../lib/projects.js';
+import { announceProject } from '../lib/realtime.js';
 import { requireUser, type AuthedBindings } from '../lib/session.js';
 import { fetchRemoteChunk, remoteSizeOk, validRemoteRef, type Remote } from '../lib/remote.js';
 import { parseBody } from '../lib/validate.js';
@@ -240,6 +241,7 @@ tracks.post('/projects/:id/tracks', async (c) => {
     if (String(e).includes('UNIQUE') || String(e).includes('PRIMARY')) return c.json({ error: 'id_taken' }, 409);
     throw e;
   }
+  announceProject(c, projectId, 'tracks');
   return c.json({ track: (await listTracks(c.env.DB, projectId, body.id))[0] }, 201);
 });
 
@@ -266,11 +268,13 @@ tracks.post('/tracks/:trackId/versions', async (c) => {
         body.id, trackId, (n?.n ?? 0) + 1, body.fileId, fromB64(body.encMeta), body.keyVersion, c.get('session').user_id, now,
       ),
       c.env.DB.prepare('UPDATE tracks SET current_version_id = ?, updated_at = ? WHERE id = ?').bind(body.id, now, trackId),
+      c.env.DB.prepare('UPDATE projects SET updated_at = ? WHERE id = ?').bind(now, projectId),
     ]);
   } catch (e) {
     if (String(e).includes('UNIQUE') || String(e).includes('PRIMARY')) return c.json({ error: 'id_taken' }, 409);
     throw e;
   }
+  announceProject(c, projectId, 'tracks');
   return c.json({ track: (await listTracks(c.env.DB, projectId, trackId))[0] }, 201);
 });
 
@@ -301,7 +305,12 @@ tracks.patch('/tracks/:trackId', async (c) => {
     sets.push('position = ?');
     args.push(body.position);
   }
-  await c.env.DB.prepare(`UPDATE tracks SET ${sets.join(', ')} WHERE id = ?`).bind(...args, trackId).run();
+  await c.env.DB.batch([
+    c.env.DB.prepare(`UPDATE tracks SET ${sets.join(', ')} WHERE id = ?`).bind(...args, trackId),
+    // Titles and current versions feed library search; a pure reorder does not count as a change.
+    ...(body.encMeta !== undefined || body.currentVersionId !== undefined ? [c.env.DB.prepare('UPDATE projects SET updated_at = ? WHERE id = ?').bind(args[0], projectId)] : []),
+  ]);
+  announceProject(c, projectId, 'tracks');
   return c.json({ track: (await listTracks(c.env.DB, projectId, trackId))[0] });
 });
 
@@ -320,9 +329,13 @@ tracks.delete('/tracks/:trackId', async (c) => {
   if (!projectId) return notFound(c);
   const g = await gate(c, projectId, 'admin');
   if (!g.ok) return g.res;
-  await c.env.DB.prepare('UPDATE tracks SET deleted_at = ? WHERE id = ?').bind(Date.now(), trackId).run();
+  await c.env.DB.batch([
+    c.env.DB.prepare('UPDATE tracks SET deleted_at = ? WHERE id = ?').bind(Date.now(), trackId),
+    c.env.DB.prepare('UPDATE projects SET updated_at = ? WHERE id = ?').bind(Date.now(), projectId),
+  ]);
   const files = await c.env.DB.prepare('SELECT file_id FROM track_versions WHERE track_id = ?').bind(trackId).all<{ file_id: string }>();
   await purgeFiles(c.env, c.executionCtx, projectId, files.results.map((f) => f.file_id));
+  announceProject(c, projectId, 'tracks');
   return c.json({ ok: true });
 });
 

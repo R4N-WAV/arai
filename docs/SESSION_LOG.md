@@ -86,3 +86,17 @@
 - Media Session artwork; guide overlay with spotlights + Help button (dismissal saved immediately: a quick reload used to bring it back); track rename; TOTP 2FA + recovery codes; invite links; bring-your-own storage (Dropbox E2E with a local mock; Drive untested end to end).
 - Player listeners now attach once to both audio elements (no gap between re-binds). A "flaky" gapless test was actually the test: concurrent uploads make track order nondeterministic.
 - Mistake: a scripted edit truncated `lib/tracks.ts` (it had no uncommitted changes; restored from git, edit redone).
+
+## Session 15 — 2026-11-14
+- Owner: "projects which are shared don't actually get shared"; find and fix everything not working as intended.
+- Root causes found (the API was correct; every one was in how clients learn about changes):
+  1. Nothing told an open tab about project changes. Invitations, acceptance, new tracks, removals and rotated keys only appeared after a full reload, which an installed app that stays signed in almost never does. The collab E2E hid this by calling `reload()` before looking for the invitation. Fixed with `project` realtime events + catch-up on return.
+  2. A project created as public (New project → Public) never got its public listening link; only the "Make public" button in Edit details created one. It showed on the profile and in Discover but could not be opened. Now created by `syncSharing` whenever an admin's browser sees it missing, including for projects already in that state (`repairPublicListening`, driven by a new `listenable` flag on the member project DTO).
+  3. Share links fell behind: the re-encrypt step was debounced in a way that dropped the change if anything re-rendered within 600 ms, ran only for changes made in that tab, and never checked on load. Now tracked until it has run, queued per project, and repaired on load by comparing the versions a link serves (`versionIds`) with the current ones.
+  4. A link payload carried the full-size cover (up to 450 KB) next to every track's waveform, so a larger album could exceed the request limit and the link silently never updated. The cover is embedded at 512 px and waveform detail is shed before audio.
+  5. Deleting an account revoked its signing key, and grants were only returned with a non-revoked granter key: everyone that person had invited (or everyone, if they had rotated the key) was locked out. The granter key is now returned regardless.
+  6. Library preferences were written back from the copy loaded at start: a second device, or a failed first load (treated as "empty"), erased pins and folders. Saves now re-read and apply only local changes.
+  7. A project hidden by a moderator left the listings but stayed playable at `/listen/<id>` (`/public/projects/:id` and its public link ignored `hidden_at`). Both now return 404 while it is hidden.
+  8. Smaller: realtime socket could stay dead after sleep (ping-on-return + replace); message threads and unread counts did not catch up on return; mute was lost at a gapless handoff; a new version / rename / delete did not bump the project's `updated_at` (stale library search).
+- Tests: `apps/api/test/realtime.test.ts`, `grants.test.ts`; `apps/web/e2e/live-sharing-flow.mjs` (no reloads). The share-link step of `collab-flow` raced the 600 ms debounce and now polls.
+- Not changed: the deploy workflow's branch list (this session's branch does not deploy by itself).

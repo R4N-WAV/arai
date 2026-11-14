@@ -176,9 +176,29 @@ Migrations live in `apps/api/migrations/NNNN_name.sql` (wrangler D1 migrations).
 
 ## 8. Realtime
 
-One Durable Object per conversation (fan-out of ciphertext, typing, receipts)
-and one per user (notifications, presence). WebSocket auth via short-lived
-ticket from `/api/realtime/ticket` (cookie-authenticated), validated by the DO.
+As built: one Durable Object per user (`UserHub`, hibernating WebSockets,
+`/api/realtime`, authenticated by the session cookie plus an Origin check).
+The API pushes small events to the hubs of everyone concerned:
+
+- messaging: `message`, `edit`, `delete`, `react`, `typing`, `read`, `conversation`;
+- projects: `{ type: 'project', projectId, what }` with `what` = `members`
+  (invitations, acceptance, roles, removal, key rotation), `details` (name,
+  artwork, visibility, deletion), `tracks`, `comments`
+  (`apps/api/src/lib/realtime.ts`, `announceProject`). Ids only; clients refetch
+  and decrypt.
+
+Nothing in the client polls for project data. An open tab stays current
+through these events, and `useResume` (`apps/web/src/lib/live.ts`) refetches
+when a tab becomes visible again, the network returns, or the socket
+reconnects, because a sleeping phone misses events. The socket itself is
+checked with a ping on return and replaced if it does not answer.
+
+Share links are the exception: the server cannot read them, so a member's
+browser re-encrypts each link's payload (`syncSharing` in
+`apps/web/src/lib/collab.ts`) after a change, and repairs links whose listed
+versions no longer match the current ones when a project page opens. A public
+project's listening link is created the same way, by whichever admin's
+browser sees that it is missing.
 
 ## 9. Architecture Decision Records
 

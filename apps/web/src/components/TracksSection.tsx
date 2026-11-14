@@ -13,9 +13,13 @@ import { VersionComments } from './Comments';
 import { TrimDialog } from './TrimDialog';
 import { CompareDialog } from './CompareDialog';
 import { isOffline, keepOffline, offlineSupported, removeOffline } from '../lib/offline';
-import { syncShares } from '../lib/collab';
+import { syncSharing } from '../lib/collab';
+import { useProjectEvents, useResume } from '../lib/live';
 
 const ACCEPT = 'audio/*,.wav,.aif,.aiff,.flac,.mp3,.m4a,.ogg';
+/** Everything a share link shows: when this changes, links need rewriting. */
+const shareSignature = (p: Project, tracks: Track[]) =>
+  [p.visibility, p.art?.at ?? 0, p.meta?.name, p.meta?.description, p.meta?.color, ...tracks.map((t) => `${t.id}:${t.current?.id}:${t.title}`)].join('|');
 const day = (t: number) => new Date(t).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
 
 function useWave(v: TrackVersion | null): WaveData | null {
@@ -269,23 +273,47 @@ export function TracksSection({ project, addOpen, setAddOpen, onTracks }: { proj
   useEffect(() => {
     if (tracks) onTracks(tracks);
   }, [tracks, onTracks]);
-  // Keep share links (and public listening) in step with the tracks.
-  const shareSig = useRef<string | null>(null);
+  // Keep share links and public listening in step with the project. On opening
+  // the page, links that fell behind are repaired and a public project gets
+  // its listening link; after a change made here, every link is rewritten.
+  // `syncedSig` only advances once a sync ran, so a change is never dropped
+  // because something else re-rendered within the debounce.
+  const syncedSig = useRef<string | null>(null);
+  const quietSig = useRef<string | null>(null);
+  const rewriteDue = useRef(false);
   useEffect(() => {
-    if (!tracks || project.role === 'listener') return;
-    const sig = `${project.art?.at ?? 0}|${project.meta?.name}|` + tracks.map((t) => `${t.id}:${t.current?.id}:${t.title}`).join('|');
-    const prev = shareSig.current;
-    shareSig.current = sig;
-    if (prev === null || prev === sig) return;
-    const h = setTimeout(() => void syncShares(project, tracks).catch(() => undefined), 600);
+    if (!tracks || project.role === 'listener' || !project.meta) return;
+    const sig = shareSignature(project, tracks);
+    if (syncedSig.current === sig) return;
+    const first = syncedSig.current === null;
+    // A change that arrived from someone else was already published by their
+    // browser (only repair); one made here must be written out, and stays due
+    // even if the same list is fetched again before the write happens.
+    if (!first && quietSig.current !== sig) rewriteDue.current = true;
+    const h = setTimeout(() => {
+      const rewrite = rewriteDue.current;
+      rewriteDue.current = false;
+      syncedSig.current = sig;
+      void syncSharing(project, tracks, rewrite).catch(() => {
+        rewriteDue.current ||= rewrite;
+        if (syncedSig.current === sig) syncedSig.current = 'retry';
+      });
+    }, first ? 0 : 600);
     return () => clearTimeout(h);
   }, [tracks, project]);
   const canEdit = project.role !== 'listener';
   const canAdmin = project.role === 'admin' || project.role === 'owner';
 
-  const refresh = useCallback(async () => {
+  const dragging = useRef(false);
+  dragging.current = draggingId !== null;
+  const refresh = useCallback(async (quiet = false) => {
     try {
       const list = await loadTracks(project);
+      if (quiet) {
+        // Never yank the list from under a drag; the next event or visit catches up.
+        if (dragging.current) return;
+        quietSig.current = shareSignature(project, list);
+      }
       setTracks(list);
       onTracks(list);
       if (canEdit) setStorage(await api('GET', '/account/storage'));
@@ -298,6 +326,11 @@ export function TracksSection({ project, addOpen, setAddOpen, onTracks }: { proj
   useEffect(() => {
     void refresh();
   }, [refresh]);
+  // Tracks other members add, rename, reorder or delete show up without a reload.
+  useProjectEvents((e) => {
+    if (e.projectId === project.id && e.what === 'tracks') void refresh(true);
+  });
+  useResume(() => void refresh(true));
 
   const startJob = (job: UploadJob) => {
     setJobs((j) => [...j, job]);

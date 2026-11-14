@@ -190,6 +190,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     if (!from || !to || !it || standby.current?.versionId !== it.version.id || to.readyState < 3) return false;
     handingOff.current = true;
     to.volume = from.volume;
+    to.muted = from.muted;
     to.preservesPitch = from.preservesPitch;
     to.playbackRate = from.playbackRate;
     to.loop = false;

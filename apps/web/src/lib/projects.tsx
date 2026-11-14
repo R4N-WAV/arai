@@ -14,9 +14,10 @@ import {
   type AccountKeys,
 } from '@arai/crypto';
 import type { MemberDto, ProjectDto, ProjectMeta, PublicMeta, Role } from '@arai/shared';
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useAmbient } from '../components/Ambient';
 import { api } from './api';
+import { useProjectEvents, useResume } from './live';
 import { useSession } from './session';
 
 export interface Project {
@@ -30,6 +31,8 @@ export interface Project {
   meta: ProjectMeta | null;
   rotationDue: boolean;
   art: { at: number; keyVersion: number } | null;
+  /** Public and playable by anyone (its listening link exists). */
+  listenable: boolean;
   /** Username of whoever invited you, while this is an open invitation. */
   invitedBy?: string;
 }
@@ -71,7 +74,7 @@ function cleanMeta(m: unknown): ProjectMeta | null {
 const publicPart = (m: ProjectMeta): PublicMeta => ({ name: m.name, description: m.description, genre: m.genre, tags: m.tags, color: m.color });
 
 async function decode(dto: ProjectDto, keys: AccountKeys, myId: string): Promise<Project> {
-  const base = { id: dto.id, role: dto.role, visibility: dto.visibility, keyVersion: dto.keyVersion, createdAt: dto.createdAt, updatedAt: dto.updatedAt, rotationDue: dto.rotationDue, art: dto.art, ...(dto.invitedBy ? { invitedBy: dto.invitedBy } : {}) };
+  const base = { id: dto.id, role: dto.role, visibility: dto.visibility, keyVersion: dto.keyVersion, createdAt: dto.createdAt, updatedAt: dto.updatedAt, rotationDue: dto.rotationDue, art: dto.art, listenable: dto.listenable, ...(dto.invitedBy ? { invitedBy: dto.invitedBy } : {}) };
   // Open every key version we hold; each grant's signature is checked first.
   for (const g of dto.grants) {
     if (keyCache.has(`${dto.id}:${g.keyVersion}`)) continue;
@@ -115,6 +118,16 @@ async function rotate(p: Project, keys: AccountKeys, myId: string): Promise<void
   keyCache.set(`${p.id}:${next}`, key);
 }
 
+/** Keeps the previous object for a project that did not change, so pages do not reload for nothing. */
+function keepUnchanged(prev: Project[] | null, next: Project[]): Project[] {
+  if (!prev) return next;
+  const old = new Map(prev.map((p) => [p.id, p]));
+  return next.map((p) => {
+    const o = old.get(p.id);
+    return o && JSON.stringify(o) === JSON.stringify(p) ? o : p;
+  });
+}
+
 interface ProjectsState {
   projects: Project[] | null;
   invites: Project[];
@@ -139,8 +152,11 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const [focused, setFocused] = useState<string | null>(null);
 
+  const seq = useRef(0);
+  const loaded = useRef(false);
   const refresh = useCallback(async () => {
     if (!user || !keys) return;
+    const mine = ++seq.current;
     try {
       const [{ projects: dtos }, { invites: inv }] = await Promise.all([
         api<{ projects: ProjectDto[] }>('GET', '/projects'),
@@ -153,17 +169,29 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
         const again = await api<{ projects: ProjectDto[] }>('GET', '/projects');
         list = await Promise.all(again.projects.map((d) => decode(d, keys, user.id)));
       }
-      setProjects(list);
-      setInvites(await Promise.all(inv.map((d) => decode(d, keys, user.id))));
+      const invited = await Promise.all(inv.map((d) => decode(d, keys, user.id)));
+      // A slower, older refresh must not overwrite a newer one.
+      if (mine !== seq.current) return;
+      loaded.current = true;
+      setProjects((prev) => keepUnchanged(prev, list));
+      setInvites((prev) => keepUnchanged(prev, invited));
       setError(null);
     } catch {
-      setError('Your projects could not be loaded. Check your connection and try again.');
+      // A failed background refresh keeps what is on screen; only the first load reports it.
+      if (mine === seq.current && !loaded.current) setError('Your projects could not be loaded. Check your connection and try again.');
     }
   }, [user, keys]);
 
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  // Invitations, removals, new roles, renamed projects and rotated keys reach
+  // an open tab as they happen, and anything missed is caught on return.
+  useProjectEvents((e) => {
+    if (e.what === 'members' || e.what === 'details') void refresh();
+  });
+  useResume(() => void refresh());
 
   // The space takes on the colours of everything in it.
   useEffect(() => {

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router';
 import { ApiError, errorMessage } from '../lib/api';
 import { createInviteLink, inviteMember, listInviteLinks, listMembers, lookupUser, removeMember, revokeInviteLink, setMemberRole, type InviteLink } from '../lib/collab';
+import { useProjectEvents } from '../lib/live';
 import { roleWithArticle, useProjects, type Project } from '../lib/projects';
 import { useSession } from '../lib/session';
 import { Modal } from './Modal';
@@ -47,6 +48,10 @@ export function PeopleDialog({ p, open, onClose }: { p: Project; open: boolean; 
       void load();
     }
   }, [open, load, p.id]);
+  // Someone accepting, leaving or changing role shows up while the dialog is open.
+  useProjectEvents((e) => {
+    if (open && e.projectId === p.id && e.what === 'members') void load();
+  });
 
   async function run(fn: () => Promise<unknown>, done: string) {
     setBusy(true);

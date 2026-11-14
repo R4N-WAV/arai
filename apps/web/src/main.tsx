@@ -73,15 +73,15 @@ function SignedIn({ children }: { children: ReactNode }) {
   const { user, keys } = useSession();
   if (!user || !keys) return <>{children}</>;
   return (
-    <ProjectsProvider key={user.id}>
-      <LibraryProvider>
-      <PlayerProvider>
-        <MeProvider>
-          <RealtimeProvider>{children}</RealtimeProvider>
-        </MeProvider>
-      </PlayerProvider>
-      </LibraryProvider>
-    </ProjectsProvider>
+    <RealtimeProvider key={user.id}>
+      <ProjectsProvider>
+        <LibraryProvider>
+          <PlayerProvider>
+            <MeProvider>{children}</MeProvider>
+          </PlayerProvider>
+        </LibraryProvider>
+      </ProjectsProvider>
+    </RealtimeProvider>
   );
 }
 

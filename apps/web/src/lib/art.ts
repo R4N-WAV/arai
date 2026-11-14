@@ -85,10 +85,30 @@ export function useArt(p: Pick<Project, 'id' | 'art'> | null | undefined): strin
 
 export const publicArtUrl = (projectId: string, at: number | null | undefined) => (at ? `/api/public/projects/${projectId}/art?v=${at}` : null);
 
+/**
+ * The payload of a link travels in one request with every track in it, so the
+ * cover goes in at page size (the full-size original could crowd tracks out).
+ */
+async function smallCopy(blob: Blob, px = 512): Promise<Blob> {
+  try {
+    const bmp = await createImageBitmap(blob);
+    const scale = Math.min(1, px / Math.max(bmp.width, bmp.height));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(bmp.width * scale));
+    canvas.height = Math.max(1, Math.round(bmp.height * scale));
+    canvas.getContext('2d')!.drawImage(bmp, 0, 0, canvas.width, canvas.height);
+    bmp.close();
+    const out = await new Promise<Blob | null>((res) => canvas.toBlob(res, 'image/jpeg', 0.82));
+    return out && out.size < blob.size ? out : blob;
+  } catch {
+    return blob;
+  }
+}
+
 /** Artwork as a data URL for share-link payloads (link holders have no project key). */
 export async function artDataUrl(p: Pick<Project, 'id' | 'art'>): Promise<string | null> {
   const url = await artUrl(p);
   if (!url) return null;
-  const blob = await (await fetch(url)).blob();
+  const blob = await smallCopy(await (await fetch(url)).blob());
   return `data:${blob.type};base64,${await toBase64Url(new Uint8Array(await blob.arrayBuffer())).then((b) => b.replace(/-/g, '+').replace(/_/g, '/'))}`;
 }

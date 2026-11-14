@@ -15,13 +15,13 @@ import {
   type ConversationDto,
   type MessageDto,
   type Reaction,
-  type RealtimeEvent,
 } from '@arai/shared';
 import { Hono, type Context } from 'hono';
 import type { Env } from '../env.js';
 import { fromB64, toB64 } from '../lib/crypto.js';
 import { requireProjectRole } from '../lib/projects.js';
 import { rateLimit } from '../lib/ratelimit.js';
+import { pushEvent } from '../lib/realtime.js';
 import { requireUser, type AuthedBindings } from '../lib/session.js';
 import { parseBody } from '../lib/validate.js';
 import { areFriends, isBlocked } from './social.js';
@@ -69,10 +69,7 @@ async function audience(db: D1Database, a: Pick<Access, 'id' | 'kind' | 'project
   return results.map((r) => r.user_id);
 }
 
-async function push(env: Env, userIds: string[], event: RealtimeEvent): Promise<void> {
-  const body = JSON.stringify(event);
-  await Promise.all(userIds.map((u) => env.HUB.get(env.HUB.idFromName(u)).push(body).catch(() => undefined)));
-}
+const push = pushEvent;
 
 // ---- reading ----------------------------------------------------------------------
 
@@ -137,8 +134,8 @@ async function conversationDto(db: D1Database, convId: string, me: string): Prom
   ).results;
   const keySql =
     a.kind === 'project'
-      ? `SELECT key_version, wrapped_key, grant_sig, granted_by, (SELECT ed25519_pub FROM user_keys WHERE user_id = granted_by AND revoked_at IS NULL ORDER BY created_at DESC LIMIT 1) AS sk FROM project_keys WHERE project_id = ? AND user_id = ? ORDER BY key_version`
-      : `SELECT key_version, wrapped_key, grant_sig, granted_by, (SELECT ed25519_pub FROM user_keys WHERE user_id = granted_by AND revoked_at IS NULL ORDER BY created_at DESC LIMIT 1) AS sk FROM conversation_keys WHERE conversation_id = ? AND user_id = ? ORDER BY key_version`;
+      ? `SELECT key_version, wrapped_key, grant_sig, granted_by, (SELECT ed25519_pub FROM user_keys WHERE user_id = granted_by ORDER BY created_at DESC LIMIT 1) AS sk FROM project_keys WHERE project_id = ? AND user_id = ? ORDER BY key_version`
+      : `SELECT key_version, wrapped_key, grant_sig, granted_by, (SELECT ed25519_pub FROM user_keys WHERE user_id = granted_by ORDER BY created_at DESC LIMIT 1) AS sk FROM conversation_keys WHERE conversation_id = ? AND user_id = ? ORDER BY key_version`;
   const keys = (await db.prepare(keySql).bind(a.kind === 'project' ? a.projectId : convId, me).all<{ key_version: number; wrapped_key: ArrayBuffer; grant_sig: ArrayBuffer; granted_by: string; sk: ArrayBuffer | null }>()).results;
   const mine = members.find((m) => m.id === me);
   const lastRead = mine?.last_read_at ?? 0;

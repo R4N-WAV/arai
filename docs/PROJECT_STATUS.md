@@ -74,6 +74,7 @@ Last updated: 2026-11-14 (session 14). Tests: 124 unit/API (crypto 21, shared 4,
 ## Phase 5 — Messaging
 - [x] E2EE DMs, groups (admin add/remove, rotation on leave) and project chats (project keyring) (migration 0007; 5 API tests; messages E2E)
 - [x] Realtime via per-user Durable Object hub (hibernating WebSockets): messages, edits, deletes, reactions, typing, read receipts
+- [x] Project events on the same hub (session 15): invitations, acceptance, roles, removal, rotation, tracks, comments and details reach open tabs; tabs catch up on return (`lib/live.ts`); 3 API tests + `live-sharing-flow` E2E
 - [x] Encrypted attachments up to 25 MB (quota-counted) · [x] reactions (fixed set) · [x] edit / delete for everyone · [x] message requests · [x] report message with optional evidence
 - [!] GIFs — greyed out until a GIF provider key is configured (`FEATURE_GIFS`, `GIF_API_KEY`)
 
