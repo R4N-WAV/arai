@@ -19,6 +19,25 @@ hash and salt depends on them (everyone would be locked out). Rotating
 `TURNSTILE_SECRET` + var `TURNSTILE_SITE_KEY` + `REQUIRE_TURNSTILE=true`,
 `GIF_API_KEY` + `FEATURE_GIFS=on`.
 
+## Optional providers (each feature stays greyed out until configured)
+Public ids go in `apps/api/wrangler.jsonc` → `vars` (a deploy overwrites
+variables set only in the dashboard); secrets via `npx wrangler secret put NAME`
+in `apps/api`.
+
+**Dropbox** (users store audio in their own Dropbox):
+1. https://www.dropbox.com/developers/apps → Create app → Scoped access → **App folder** → name it e.g. `Arai`.
+2. Permissions: `files.content.write`, `files.content.read`, `sharing.write`, `sharing.read` → Submit.
+3. Settings: Redirect URI `https://arai.ranuj-s.workers.dev/storage/callback`; *Allow public clients (Implicit Grant & PKCE)*: Allow.
+4. Copy the **App key** into `vars.DROPBOX_APP_KEY`. No secret is needed (PKCE). New apps allow 500 users until you apply for production.
+
+**Google Drive**:
+1. https://console.cloud.google.com → new project → enable **Google Drive API**.
+2. OAuth consent screen: External, scope `.../auth/drive.file`; add yourself as a test user (publish it to open it to everyone).
+3. Credentials → OAuth client ID → Web application → redirect URI `https://arai.ranuj-s.workers.dev/storage/callback` → put the client id in `vars.GOOGLE_CLIENT_ID`, the client secret via `wrangler secret put GOOGLE_CLIENT_SECRET`.
+4. Credentials → API key restricted to the Drive API → `wrangler secret put GOOGLE_API_KEY` (lets Arai read the shared ciphertext files).
+
+**GIFs**: a GIF provider key as `GIF_API_KEY` + `vars.FEATURE_GIFS = "on"`.
+
 ## Backups
 - **D1 Time Travel** (built in, free): any minute in the last 30 days.
   `npx wrangler d1 time-travel info arai --timestamp=<ISO time>` shows the

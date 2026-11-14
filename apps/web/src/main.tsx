@@ -25,8 +25,10 @@ import { Register } from './pages/Register';
 
 import { SignIn } from './pages/SignIn';
 import { Unlock } from './pages/Unlock';
+import { JoinPage, takeReturnPath } from './pages/Join';
 import { startStreamingWorker } from './lib/stream';
 import './styles/app.css';
+const StorageCallback = lazy(() => import('./pages/StorageCallback').then((m) => ({ default: m.StorageCallback })));
 const PrivacyPage = lazy(() => import('./pages/Info').then((m) => ({ default: m.PrivacyPage })));
 const HelpPage = lazy(() => import('./pages/Info').then((m) => ({ default: m.HelpPage })));
 const Recover = lazy(() => import('./pages/Recover').then((m) => ({ default: m.Recover })));
@@ -83,10 +85,17 @@ function SignedIn({ children }: { children: ReactNode }) {
   );
 }
 
+function JoinRoute() {
+  const { loading, user, keys } = useSession();
+  if (loading) return <p className="loading" role="status">Loading…</p>;
+  if (user && !keys) return <Unlock />;
+  return <JoinPage />;
+}
+
 function GuestOnly({ children }: { children: ReactNode }) {
   const { loading, user } = useSession();
   if (loading) return <p className="loading" role="status">Loading…</p>;
-  return user ? <Navigate to="/" replace /> : <>{children}</>;
+  return user ? <Navigate to={takeReturnPath()} replace /> : <>{children}</>;
 }
 
 createRoot(document.getElementById('root')!).render(
@@ -107,6 +116,7 @@ createRoot(document.getElementById('root')!).render(
             <Route path="discover" element={<Discover />} />
             <Route path="activity" element={<Activity />} />
             <Route path="admin" element={<AdminPage />} />
+            <Route path="storage/callback" element={<StorageCallback />} />
             <Route path="messages" element={<Messages />} />
             <Route path="messages/:id" element={<Messages />} />
             <Route path="settings" element={<Settings />} />
@@ -115,6 +125,7 @@ createRoot(document.getElementById('root')!).render(
           </Route>
           <Route path="/u/:username" element={<ProfileRoute />} />
           <Route path="/s/:id" element={<SharePage />} />
+          <Route path="/join/:id" element={<JoinRoute />} />
           <Route path="/privacy" element={<PrivacyPage />} />
           <Route path="/help" element={<HelpPage />} />
           <Route path="/listen/:projectId" element={<ListenPage />} />

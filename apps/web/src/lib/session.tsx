@@ -4,6 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useState, type React
 import { api, ApiError } from './api';
 import type { UnlockInfo } from './account';
 import { forgetStreams } from './stream';
+import { cloudCtx } from './cloud';
 import { forgetAllTabs, rememberForTab, restoreForTab } from './tabvault';
 
 interface SessionState {
@@ -19,7 +20,7 @@ interface SessionState {
   signOut: () => Promise<void>;
 }
 
-const DEFAULT_CAPS: Capabilities = { emailDelivery: false, sms: false, gifs: false, push: false, turnstileSiteKey: null };
+const DEFAULT_CAPS: Capabilities = { emailDelivery: false, sms: false, gifs: false, push: false, storage: { dropbox: null, gdrive: null }, turnstileSiteKey: null };
 const Ctx = createContext<SessionState | null>(null);
 
 export function SessionProvider({ children }: { children: ReactNode }) {
@@ -50,6 +51,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     void Promise.all([refresh(), api<Capabilities>('GET', '/config').then(setCaps).catch(() => setCaps(DEFAULT_CAPS))]).finally(() => setLoading(false));
   }, [refresh]);
 
+  cloudCtx.keys = keys;
+  cloudCtx.userId = user?.id ?? null;
+  cloudCtx.ids = caps.storage;
   const value: SessionState = {
     loading,
     user,

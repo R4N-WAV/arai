@@ -56,8 +56,11 @@ await page.evaluate(() => {
     a.addEventListener('ended', () => window.__log.push(['ended', performance.now(), i]));
   });
 });
-await page.locator('.track', { hasText: 'Part One' }).locator('.track-main').click();
-await page.locator('.player').getByText('Part Two').waitFor({ timeout: 20000 });
+// Both files upload at once, so either may come first: play the first row, expect the second next.
+const [firstTitle, secondTitle] = await page.locator('.track-title').allTextContents();
+await page.locator('.track').first().locator('.track-main').click();
+await page.locator('.player').getByText(secondTitle).waitFor({ timeout: 20000 });
+void firstTitle;
 await page.waitForTimeout(500);
 const log = await page.evaluate(() => window.__log);
 const plays = log.filter((e) => e[0] === 'playing');

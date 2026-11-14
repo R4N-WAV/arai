@@ -21,6 +21,7 @@ import { MAX_FILE_BYTES, type TrackDto, type TrackVersionDto } from '@arai/share
 import { api, ApiError } from './api';
 import { analyse, sniff, type AudioFormat } from './audio';
 import { aiffToWav, browserPlaysAiff } from './aiff';
+import { cloudCtx, deleteRemote, uploadEncrypted, uploadTarget } from './cloud';
 import { keyFor, newProjectId as newId, projectKey, type Project } from './projects';
 
 export interface VersionMeta {
@@ -141,6 +142,13 @@ export async function makeCurrent(project: Project, track: Track, versionId: str
 
 export async function deleteTrack(track: Track): Promise<void> {
   await api('DELETE', `/tracks/${track.id}`);
+  // Files kept in the uploader's own cloud are removed by the uploader's browser.
+  for (const v of track.versions) {
+    const st = v.file.storage;
+    if (st && st !== 'arai' && v.createdBy === cloudCtx.userId && cloudCtx.keys && cloudCtx.ids[st]) {
+      void deleteRemote(cloudCtx.keys, st, cloudCtx.ids[st]!, v.file.id, v.file.remoteRef);
+    }
+  }
 }
 
 // ---------------------------------------------------------------- uploads
@@ -187,6 +195,8 @@ export class UploadJob {
   private fileKey: Uint8Array | null = null;
   private meta: VersionMeta | null = null;
   private trackDone: Track | null = null;
+  /** The ciphertext went to the uploader's own Dropbox / Google Drive. */
+  private remote = false;
 
   constructor(
     readonly project: Project,
@@ -245,34 +255,70 @@ export class UploadJob {
         };
         const fileId = newId();
         const fileKey = await generateKey();
-        await api('POST', `/projects/${this.project.id}/files`, {
-          id: fileId,
-          kind: 'audio',
-          encSize: encryptedSize(this.file.size),
-          chunkCount: chunkCount(this.file.size),
-          encFileKey: await toBase64Url(await seal(key, fileKey, fileKeyCtx(fileId))),
-          keyVersion: this.project.keyVersion,
-        });
+        const target = uploadTarget();
+        const clientId = target === 'arai' ? null : cloudCtx.ids[target];
+        if (target !== 'arai' && clientId && cloudCtx.keys) {
+          // Your own cloud: encrypt here, upload the ciphertext there, then register its read link.
+          const count = chunkCount(this.file.size);
+          this.set('uploading');
+          const remoteRef = await uploadEncrypted(
+            cloudCtx.keys,
+            target,
+            clientId,
+            fileId,
+            encryptedSize(this.file.size),
+            count,
+            async (i) => encryptChunk(fileKey, fileId, i, i === count - 1, new Uint8Array(await this.file.slice(i * CHUNK_SIZE, Math.min(this.file.size, (i + 1) * CHUNK_SIZE)).arrayBuffer())),
+            (pr) => {
+              this.progress = pr;
+              this.onChange(this);
+            },
+          );
+          await api('POST', `/projects/${this.project.id}/files`, {
+            id: fileId,
+            kind: 'audio',
+            encSize: encryptedSize(this.file.size),
+            chunkCount: count,
+            encFileKey: await toBase64Url(await seal(key, fileKey, fileKeyCtx(fileId))),
+            keyVersion: this.project.keyVersion,
+            storage: target,
+            remoteRef,
+          });
+          this.remote = true;
+        } else {
+          await api('POST', `/projects/${this.project.id}/files`, {
+            id: fileId,
+            kind: 'audio',
+            encSize: encryptedSize(this.file.size),
+            chunkCount: chunkCount(this.file.size),
+            encFileKey: await toBase64Url(await seal(key, fileKey, fileKeyCtx(fileId))),
+            keyVersion: this.project.keyVersion,
+          });
+        }
         this.fileId = fileId;
         this.fileKey = fileKey;
       }
       const fileId = this.fileId!;
       const n = chunkCount(this.file.size);
-      const { received } = await api<{ received: number[] }>('GET', `/files/${fileId}/status`);
-      const have = new Set(received);
-      this.set('uploading');
-      for (let i = 0; i < n; i++) {
-        if (signal.aborted) return null;
-        if (!have.has(i)) {
-          const plain = new Uint8Array(await this.file.slice(i * CHUNK_SIZE, Math.min(this.file.size, (i + 1) * CHUNK_SIZE)).arrayBuffer());
-          const enc = await encryptChunk(this.fileKey!, fileId, i, i === n - 1, plain);
-          await putChunk(fileId, i, enc, signal);
+      if (!this.remote) {
+        const { received } = await api<{ received: number[] }>('GET', `/files/${fileId}/status`);
+        const have = new Set(received);
+        this.set('uploading');
+        for (let i = 0; i < n; i++) {
+          if (signal.aborted) return null;
+          if (!have.has(i)) {
+            const plain = new Uint8Array(await this.file.slice(i * CHUNK_SIZE, Math.min(this.file.size, (i + 1) * CHUNK_SIZE)).arrayBuffer());
+            const enc = await encryptChunk(this.fileKey!, fileId, i, i === n - 1, plain);
+            await putChunk(fileId, i, enc, signal);
+          }
+          this.progress = (i + 1) / n;
+          this.onChange(this);
         }
-        this.progress = (i + 1) / n;
-        this.onChange(this);
+        this.set('finishing');
+        await api('POST', `/files/${fileId}/complete`);
+      } else {
+        this.set('finishing');
       }
-      this.set('finishing');
-      await api('POST', `/files/${fileId}/complete`);
       const versionId = newId();
       const encMeta = await toBase64Url(await sealJson(key, this.meta, versionCtx(versionId)));
       let dto: TrackDto;
@@ -313,6 +359,9 @@ export const UPLOAD_ERRORS: Record<string, string> = {
   forbidden: 'You do not have permission to upload to this project.',
   locked: 'This project is locked in this browser.',
   stale_key: 'The project’s key just changed (someone left). Reload the page and try again.',
+  remote_unreadable: 'Your cloud storage did not confirm the upload. Try again, or switch uploads back to Arai in Settings.',
+  reconnect_needed: 'Your cloud storage connection expired. Reconnect it in Settings.',
+  not_connected: 'Connect your cloud storage in Settings first, or switch uploads back to Arai.',
 };
 
 // ---------------------------------------------------------------- playback

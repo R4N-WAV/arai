@@ -78,7 +78,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const elA = useRef<HTMLAudioElement>(null);
   const elB = useRef<HTMLAudioElement>(null);
   const audio = useRef<HTMLAudioElement | null>(null);
-  const [active, setActive] = useState<0 | 1>(0);
+  const [, setActive] = useState<0 | 1>(0); // re-render after a handoff
   const standby = useRef<{ versionId: string; ready: boolean } | null>(null);
   const handingOff = useRef(false);
   const rafRef = useRef(0);
@@ -210,39 +210,57 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     return true;
   }, [queue]);
 
+  // Latest state for the element listeners below (attached once, never re-bound,
+  // so no event can slip through between two renders).
+  const latest = useRef({ queue, index, go, handoff, prepareNext });
+  latest.current = { queue, index, go, handoff, prepareNext };
+
   useEffect(() => {
-    const el = audio.current;
-    if (!el) return;
-    const on = (name: string, fn: () => void) => (el.addEventListener(name, fn), () => el.removeEventListener(name, fn));
-    // Watch the last moments closely: timeupdate (~4/s) is too coarse for a seamless switch.
-    const endOf = () => queue[index]?.track.trims?.[queue[index]!.version.id]?.end ?? el.duration;
-    const watchEnd = () => {
-      cancelAnimationFrame(rafRef.current);
-      const step = () => {
-        if (el.paused || el.loop || abRef.current.b !== null) return;
-        const left = endOf() - el.currentTime;
-        // Element start latency is a few ms; leave ~25 ms so the next one begins on time.
-        if (left <= 0.025 * Math.max(1, el.playbackRate) && index < queue.length - 1 && handoff(index + 1)) return;
-        if (left > 0) rafRef.current = requestAnimationFrame(step);
+    const els = [elA.current, elB.current].filter((x): x is HTMLAudioElement => !!x);
+    const offs: Array<() => void> = [];
+    for (const el of els) {
+      // Only the active element drives the player; the idle one is preloading.
+      const on = (name: string, fn: () => void) => {
+        const h = () => {
+          if (el === audio.current) fn();
+        };
+        el.addEventListener(name, h);
+        offs.push(() => el.removeEventListener(name, h));
       };
-      rafRef.current = requestAnimationFrame(step);
-    };
-    const offs = [
+      const endOf = () => {
+        const { queue: q, index: i } = latest.current;
+        return q[i]?.track.trims?.[q[i]!.version.id]?.end ?? el.duration;
+      };
+      // Watch the last moments closely: timeupdate (~4/s) is too coarse for a seamless switch.
+      const watchEnd = () => {
+        cancelAnimationFrame(rafRef.current);
+        const step = () => {
+          if (el !== audio.current || el.paused || el.loop || abRef.current.b !== null) return;
+          const { queue: q, index: i, handoff: h } = latest.current;
+          const left = endOf() - el.currentTime;
+          // Element start latency is a few ms; leave ~25 ms so the next one begins on time.
+          if (left <= 0.025 * Math.max(1, el.playbackRate) && i < q.length - 1 && h(i + 1)) return;
+          if (left > 0) rafRef.current = requestAnimationFrame(step);
+        };
+        rafRef.current = requestAnimationFrame(step);
+      };
       // 'playing' fires only when sound actually starts; 'waiting' when it stalls.
       on('playing', () => {
         setStatus('playing');
         // Count one play per load (daily totals only; see /projects/:id/plays).
-        const cur = queue[index];
+        const { queue: q, index: i } = latest.current;
+        const cur = q[i];
         if (cur && counted.current !== `${cur.version.id}:${loadToken.current}`) {
           counted.current = `${cur.version.id}:${loadToken.current}`;
           void fetch(`/api/tracks/${cur.track.id}/play`, { method: 'POST', headers: { 'X-Arai-CSRF': '1' }, credentials: 'same-origin' }).catch(() => undefined);
         }
-      }),
-      on('waiting', () => setStatus('loading')),
-      on('pause', () => !handingOff.current && setStatus((s) => (s === 'loading' ? s : 'paused'))),
+      });
+      on('waiting', () => setStatus('loading'));
+      on('pause', () => !handingOff.current && setStatus((st) => (st === 'loading' ? st : 'paused')));
       on('timeupdate', () => {
         setTime(el.currentTime);
-        const cur = queue[index];
+        const { queue: q, index: i, go: g, prepareNext: prep } = latest.current;
+        const cur = q[i];
         // Section loop, then the version's trim end (acts like the track ending).
         if (abRef.current.a !== null && abRef.current.b !== null && el.currentTime >= abRef.current.b) {
           el.currentTime = abRef.current.a;
@@ -251,7 +269,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         const end = cur?.track.trims?.[cur.version.id]?.end;
         if (end && el.currentTime >= end) {
           if (el.loop) el.currentTime = cur.track.trims![cur.version.id]!.start ?? 0;
-          else if (index < queue.length - 1) go(index + 1);
+          else if (i < q.length - 1) g(i + 1);
           else {
             el.pause();
             el.currentTime = end;
@@ -259,26 +277,26 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
           return;
         }
         // Warm the next track well before this one ends, so the switch is instant.
-        const nextItem = queue[index + 1];
+        const nextItem = q[i + 1];
         if (nextItem && el.duration && el.currentTime > Math.min(10, el.duration * 0.25) && !prefetched.current.has(nextItem.version.id)) {
           prefetched.current.add(nextItem.version.id);
           void prefetch(nextItem.project, nextItem.version);
         }
         // Preload the next track into the idle element, then watch the final second.
         const left = endOf() - el.currentTime;
-        if (nextItem && !el.loop && left < 12) void prepareNext(nextItem);
+        if (nextItem && !el.loop && left < 12) void prep(nextItem);
         if (nextItem && left < 1.2) watchEnd();
-      }),
-      on('loadedmetadata', () => Number.isFinite(el.duration) && setDuration(el.duration)),
+      });
+      on('loadedmetadata', () => Number.isFinite(el.duration) && setDuration(el.duration));
       on('ended', () => {
-        if (index < queue.length - 1) go(index + 1);
+        const { queue: q, index: i, go: g } = latest.current;
+        if (i < q.length - 1) g(i + 1);
         else setStatus('paused');
-      }),
-      on('error', () => !handingOff.current && el.getAttribute('src') && setStatus('error')),
-    ];
+      });
+      on('error', () => !handingOff.current && el.getAttribute('src') && setStatus('error'));
+    }
     return () => offs.forEach((f) => f());
-    // Re-bind when the active element changes after a handoff.
-  }, [index, queue, go, active, handoff, prepareNext]);
+  }, []);
 
   // Operating-system media keys, lock screen and headphone buttons.
   useEffect(() => {

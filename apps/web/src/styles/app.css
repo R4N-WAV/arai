@@ -792,3 +792,9 @@ kbd { display: inline-block; min-width: 1.8em; padding: 1px 6px; margin-right: 4
 .guide-dots span.on { background: var(--text); }
 .nav-group .help-btn { background: transparent; border: 0; font: inherit; color: inherit; cursor: pointer; width: 100%; text-align: left; }
 .help-btn svg { width: 20px; height: 20px; }
+.totp { align-items: flex-start; }
+.totp-qr { background: #fff; border-radius: 8px; padding: 6px; }
+.totp-secret { letter-spacing: 0.08em; overflow-wrap: anywhere; }
+.recovery-codes { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 12ch)); gap: 4px var(--s-5); }
+.upload-target { border: 0; padding: var(--s-3) 0 0; margin: 0; display: flex; flex-wrap: wrap; gap: var(--s-2) var(--s-5); }
+.upload-target legend { margin-bottom: var(--s-2); }

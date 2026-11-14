@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import { EMAIL_REASON, Notice, SMS_REASON, Unavailable } from '../components/Unavailable';
-import { api, errorMessage } from '../lib/api';
+import { api, ApiError, errorMessage } from '../lib/api';
 import { useSession } from '../lib/session';
+import { connect, connected, disconnect, PROVIDER_NAME, setUploadTarget, uploadTarget, type Provider } from '../lib/cloud';
 import { currentSubscription, disablePush, enablePush, pushSupported } from '../lib/push';
 import { Field } from '../components/Field';
-import { changePassword, changeUsername, deleteAccount } from '../lib/account';
+import { changePassword, changeUsername, currentAuthKey as currentAuthKey_, deleteAccount } from '../lib/account';
+import { renderSVG } from 'uqr';
 import { exportMyData } from '../lib/exporter';
 import { useProjects } from '../lib/projects';
 import type { PersonDto } from '@arai/shared';
@@ -86,6 +88,7 @@ export function Settings() {
       <section className="section" aria-labelledby="mfa">
         <h2 id="mfa">Two-factor authentication</h2>
         <p className="section-lede">Adds a one-time code when you sign in. Optional.</p>
+        <AuthenticatorApp />
         {!caps.emailDelivery && <Unavailable title="Email code" reason={EMAIL_REASON} action="Turn on" />}
         {!caps.sms && <Unavailable title="Text message (SMS) code" reason={SMS_REASON} action="Turn on" />}
       </section>
@@ -152,6 +155,7 @@ export function Settings() {
         )}
       </section>
 
+      <StorageSection />
       <PushSection />
       <OfflineSection />
       <BlockedSection />
@@ -251,6 +255,161 @@ function AccountControl() {
         </form>
       )}
     </div>
+  );
+}
+
+function AuthenticatorApp() {
+  const { unlockInfo } = useSession();
+  const [state, setState] = useState<{ enabled: boolean; recoveryCodesLeft: number } | null>(null);
+  const [step, setStep] = useState<'idle' | 'password' | 'scan' | 'codes' | 'disable' | 'regen'>('idle');
+  const [pw, setPw] = useState('');
+  const [setup, setSetup] = useState<{ secret: string; uri: string } | null>(null);
+  const [code, setCode] = useState('');
+  const [codes, setCodes] = useState<string[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const load = useCallback(() => api<{ enabled: boolean; recoveryCodesLeft: number }>('GET', '/account/totp').then(setState).catch(() => undefined), []);
+  useEffect(() => void load(), [load]);
+  const run = async (fn: () => Promise<void>) => {
+    setBusy(true);
+    setMsg(null);
+    try {
+      await fn();
+    } catch (e) {
+      setMsg(e instanceof Error && e.message === 'vault_unlock_failed' ? 'That is not your current password.' : e instanceof ApiError && e.code === 'invalid_mfa' ? 'That code is not right. Try the newest one.' : errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  if (!state || !unlockInfo) return null;
+  const qr = setup ? `data:image/svg+xml;utf8,${encodeURIComponent(renderSVG(setup.uri, { border: 2 }))}` : null;
+  return (
+    <div className="row totp">
+      <div className="row-main">
+        <div className="row-title">Authenticator app {state.enabled && <span className="tag tag-ok">On</span>}</div>
+        <p className="row-sub">{state.enabled ? `Sign-in asks for a code from your app. ${state.recoveryCodesLeft} recovery code${state.recoveryCodesLeft === 1 ? '' : 's'} left.` : 'Use any authenticator app (Apple Passwords, Google Authenticator, 1Password, Authy…). Free, works offline.'}</p>
+        {msg && <Notice kind="error">{msg}</Notice>}
+        {(step === 'password' || step === 'disable' || step === 'regen') && (
+          <form
+            className="share-form"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void run(async () => {
+                const currentAuthKey = await currentAuthKey_(unlockInfo, pw);
+                if (step === 'password') {
+                  setSetup(await api('POST', '/account/totp/setup', { currentAuthKey }));
+                  setStep('scan');
+                } else if (step === 'disable') {
+                  await api('POST', '/account/totp/disable', { currentAuthKey });
+                  setStep('idle');
+                  await load();
+                } else {
+                  setCodes((await api<{ recoveryCodes: string[] }>('POST', '/account/totp/recovery-codes', { currentAuthKey })).recoveryCodes);
+                  setStep('codes');
+                  await load();
+                }
+                setPw('');
+              });
+            }}
+          >
+            <Field label="Password" type="password" value={pw} onChange={(e) => setPw(e.target.value)} autoComplete="current-password" />
+            <button type="submit" className={step === 'disable' ? 'btn btn-danger btn-sm' : 'btn btn-primary btn-sm'} disabled={busy || !pw}>{step === 'disable' ? 'Turn off' : 'Continue'}</button>
+          </form>
+        )}
+        {step === 'scan' && setup && qr && (
+          <form className="share-form" onSubmit={(e) => { e.preventDefault(); void run(async () => { setCodes((await api<{ recoveryCodes: string[] }>('POST', '/account/totp/enable', { code: code.replace(/\s/g, '') })).recoveryCodes); setStep('codes'); setCode(''); await load(); }); }}>
+            <p className="row-sub">Scan this with your authenticator app, or enter the key by hand.</p>
+            <img className="totp-qr" src={qr} alt="QR code for your authenticator app" width={180} height={180} />
+            <p className="mono totp-secret" aria-label="Setup key">{setup.secret.match(/.{1,4}/g)!.join(' ')}</p>
+            <Field label="Code from the app" inputMode="numeric" autoComplete="one-time-code" value={code} onChange={(e) => setCode(e.target.value)} maxLength={7} />
+            <button type="submit" className="btn btn-primary btn-sm" disabled={busy || code.replace(/\s/g, '').length !== 6}>Turn on</button>
+          </form>
+        )}
+        {step === 'codes' && (
+          <div className="share-form" role="status">
+            <p className="row-title">Save these recovery codes</p>
+            <p className="row-sub">Each one lets you sign in once without your phone. They are shown only now.</p>
+            <ul className="recovery-codes mono">{codes.map((c) => <li key={c}>{c}</li>)}</ul>
+            <div className="form-actions">
+              <button type="button" className="btn btn-sm" onClick={() => void navigator.clipboard?.writeText(codes.join('\n'))}>Copy</button>
+              <button type="button" className="btn btn-primary btn-sm" onClick={() => { setStep('idle'); setCodes([]); }}>I saved them</button>
+            </div>
+          </div>
+        )}
+      </div>
+      {step === 'idle' && (
+        <span className="form-actions">
+          {state.enabled ? (
+            <>
+              <button type="button" className="btn btn-sm" onClick={() => setStep('regen')}>New recovery codes</button>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => setStep('disable')}>Turn off</button>
+            </>
+          ) : (
+            <button type="button" className="btn btn-sm" onClick={() => setStep('password')}>Set up</button>
+          )}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function StorageSection() {
+  const { caps } = useSession();
+  const [storage, setStorage] = useState<{ used: number; quota: number } | null>(null);
+  const [linked, setLinked] = useState<Provider[] | null>(null);
+  const [target, setTarget] = useState(uploadTarget());
+  const [msg, setMsg] = useState<{ kind: 'ok' | 'error'; text: string } | null>(() => {
+    const p = new URLSearchParams(location.search).get('connected');
+    return p === 'dropbox' || p === 'gdrive' ? { kind: 'ok', text: `${PROVIDER_NAME[p]} is connected. New uploads go there, encrypted.` } : null;
+  });
+  const load = useCallback(() => {
+    api<{ used: number; quota: number }>('GET', '/account/storage').then(setStorage).catch(() => undefined);
+    connected().then(setLinked).catch(() => setLinked([]));
+  }, []);
+  useEffect(() => void load(), [load]);
+  const mb = (n: number) => `${(n / 1048576).toFixed(n > 10 * 1048576 ? 0 : 1)} MB`;
+  const choose = (v: 'arai' | Provider) => {
+    setUploadTarget(v);
+    setTarget(v);
+  };
+  return (
+    <section className="section" aria-labelledby="stor-h">
+      <h2 id="stor-h">Storage</h2>
+      <p className="section-lede">
+        {storage ? `Arai storage: ${mb(storage.used)} of ${mb(storage.quota)} used.` : 'Arai storage'} For more room, connect your own Dropbox or Google Drive: Arai creates a folder called “Arai (encrypted)” there and stores your audio in it, encrypted on this device first. Dropbox and Google only ever see unreadable data; your collaborators still play it through Arai.
+      </p>
+      {msg && <Notice kind={msg.kind}>{msg.text}</Notice>}
+      {(['dropbox', 'gdrive'] as const).map((p) => {
+        const clientId = caps.storage[p];
+        const on = linked?.includes(p);
+        if (!clientId) return <Unavailable key={p} title={PROVIDER_NAME[p]} reason={`Connecting ${PROVIDER_NAME[p]} needs Arai to be registered with ${p === 'dropbox' ? 'Dropbox' : 'Google'} first (the site owner sets this up once).`} action="Connect" />;
+        return (
+          <div key={p} className="row">
+            <div className="row-main">
+              <div className="row-title">{PROVIDER_NAME[p]} {on && <span className="tag tag-ok">Connected</span>}</div>
+              <p className="row-sub">{on ? 'Arai can only see its own folder there.' : 'Opens a sign-in page to approve access to an Arai folder only.'}</p>
+            </div>
+            {on ? (
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => void disconnect(p).then(() => { if (target === p) choose('arai'); load(); setMsg({ kind: 'ok', text: `${PROVIDER_NAME[p]} disconnected. Files already there keep playing; delete the folder yourself if you no longer want them.` }); })}>
+                Disconnect
+              </button>
+            ) : (
+              <button type="button" className="btn btn-sm" onClick={() => void connect(p, clientId).catch((e) => setMsg({ kind: 'error', text: errorMessage(e) }))}>Connect</button>
+            )}
+          </div>
+        );
+      })}
+      {linked && linked.length > 0 && (
+        <fieldset className="upload-target">
+          <legend className="field-label">Store new uploads from this device in</legend>
+          {(['arai', ...linked] as const).map((v) => (
+            <label key={v} className="check">
+              <input type="radio" name="upload-target" checked={target === v} onChange={() => choose(v)} /> {v === 'arai' ? 'Arai' : `My ${PROVIDER_NAME[v]}`}
+            </label>
+          ))}
+        </fieldset>
+      )}
+    </section>
   );
 }
 

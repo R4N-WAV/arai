@@ -79,3 +79,10 @@
 - Phase 11: A/B compare (Web Audio, loudness-matched), AIFF→WAV. Phase 12: dual-element gapless handoff (~+36 ms measured), AudioWorklet pitch shift.
 - Phase 13: Web Push with empty pushes (VAPID), badge, update banner. Phase 14: welcome guide, shortcut sheet, /privacy, /help.
 - Mistakes caught and fixed: a pushed lint error (unused state) and a pushed typecheck error (node:crypto in the API vitest config), both made the deploy job refuse that commit; fixed immediately. CompareDialog needed AudioContext.resume(); handoff readiness used readyState instead of an event streams may not fire.
+
+## Session 14 — 2026-11-14
+- Owner: finish all phases; Dropbox/Google Drive storage; iOS top blur; guide as an overlay reopened from Help; artwork on the lock screen.
+- iOS: `black-translucent` status bar let content scroll under the clock on pages without the sticky bar, and a 20 px fade under the bar read as blur → solid black status bar (needs re-adding the Home Screen app), hairline instead of fade, sticky edge on public pages.
+- Media Session artwork; guide overlay with spotlights + Help button (dismissal saved immediately: a quick reload used to bring it back); track rename; TOTP 2FA + recovery codes; invite links; bring-your-own storage (Dropbox E2E with a local mock; Drive untested end to end).
+- Player listeners now attach once to both audio elements (no gap between re-binds). A "flaky" gapless test was actually the test: concurrent uploads make track order nondeterministic.
+- Mistake: a scripted edit truncated `lib/tracks.ts` (it had no uncommitted changes; restored from git, edit redone).

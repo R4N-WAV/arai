@@ -195,3 +195,35 @@ export type RealtimeEvent =
   | { type: 'typing'; conversationId: string; userId: string }
   | { type: 'read'; conversationId: string; userId: string; at: number }
   | { type: 'conversation'; conversationId: string };
+
+// ---- invite links -----------------------------------------------------------------
+export const createInviteLinkRequest = z.object({
+  id: entityId,
+  role: z.enum(['listener', 'editor']),
+  tokenHash: b64(32),
+  encPayload: b64(41, 64 * 1024),
+  encSecret: b64(41, 1024),
+  keyVersion: z.number().int().positive(),
+  maxUses: z.number().int().min(1).max(100),
+  expiresInDays: z.number().int().min(1).max(30),
+});
+export const joinRequest = z.object({
+  token: b64(32),
+  grants: z.array(z.object({ keyVersion: z.number().int().positive(), wrappedKey: b64(80), signature: b64(64) })).min(1).max(1000),
+});
+export interface InviteLinkDto {
+  id: string;
+  role: 'listener' | 'editor';
+  maxUses: number;
+  uses: number;
+  expiresAt: number;
+  encSecret: string;
+  keyVersion: number;
+  createdAt: number;
+}
+/** Decrypted invite-link payload. */
+export interface InvitePayload {
+  projectId: string;
+  name: string;
+  keys: Array<{ keyVersion: number; key: string }>;
+}

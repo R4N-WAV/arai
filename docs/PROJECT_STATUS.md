@@ -1,6 +1,6 @@
 # Project Status — authoritative checklist
 
-Last updated: 2026-11-02 (session 13). Tests: 117 unit/API (crypto 21, shared 4, api 85, web 7) + 15 browser E2E flows (auth, projects, tracks, profile-import, collab, messages, audio-admin, device-art, account, library, versions, playback, push, onboarding, a11y). `[x]` done & tested · `[~]` in progress · `[ ]` not started · `[!]` blocked.
+Last updated: 2026-11-14 (session 14). Tests: 124 unit/API (crypto 21, shared 4, api 92, web 7) + 18 browser E2E flows (auth, projects, tracks, profile-import, collab, messages, audio-admin, device-art, account, library, versions, playback, push, onboarding, a11y, cloud-storage, security-invite + a11y of the guide). `[x]` done & tested · `[~]` in progress · `[ ]` not started · `[!]` blocked.
 
 ## Phase 0 — Research & architecture
 - [x] Repository inspected (empty, greenfield)
@@ -13,8 +13,8 @@ Last updated: 2026-11-02 (session 13). Tests: 117 unit/API (crypto 21, shared 4,
 - [x] Financial limitations documented — `ARCHITECTURE.md §6`, `REMAINING_TO_V1.md`
 
 ## Phase 1 — Technical foundation
-- [~] Monorepo scaffold — npm workspaces, TS strict, Vitest, CI + Dependabot done; ESLint not yet added
-- [~] Worker + Hono + security headers/CSP + origin/CSRF guard + body limit + opaque errors (tested); static assets serving waits for `apps/web`
+- [x] Monorepo scaffold — npm workspaces, TS strict, Vitest, CI + Dependabot, oxlint (Phase 8)
+- [x] Worker + Hono + security headers/CSP + origin/CSRF guard + body limit + opaque errors; serves the SPA as static assets
 - [x] D1 migration 0001 (identity, credentials, vaults, keys, sessions, tokens, MFA, rate limits, platform roles, audit log) — DB-level uniqueness/format/single-owner/append-only tested
 - [x] Hash-chained audit log (`apps/api/src/lib/audit.ts`) + tamper tests
 - [x] `packages/crypto`: Argon2id KDF w/ downgrade floor, HKDF split, AEAD blobs w/ context binding, vault wrap/unwrap, recovery key codec, sealed boxes, signatures, fingerprints, chunked random-access file encryption (13 tests)
@@ -27,11 +27,11 @@ Last updated: 2026-11-02 (session 13). Tests: 117 unit/API (crypto 21, shared 4,
 - [x] Deploy pipeline GitHub -> Cloudflare (`deploy.yml`) — **inactive until owner sets secrets/variable**
 - [!] Email verification, email sign-in, email reset, email OTP — blocked: email provider + domain (deferred by owner)
 - [!] SMS 2FA — blocked: paid SMS provider (deferred by owner)
-- [ ] 2FA recovery codes (only meaningful once a 2FA method exists)
+- [x] Two-factor sign-in with an authenticator app (TOTP, RFC 6238; secret sealed at rest; replay refused) + 10 one-time recovery codes (session 14; RFC vector test, API test, E2E)
 - [x] Password change, username change (Phase 9) · [!] email change (needs email delivery to verify)
 - [x] Visual identity "ambient space" implemented (DESIGN_SYSTEM.md): hand-lettered அறை logo outlined to SVG, self-hosted fonts, ambient background engine (`ambientPalette` + `Ambient.tsx`), all screens restyled; E2E green
 - [x] Logo click / reload keeps the tab unlocked (`tabvault.ts`)
-- [ ] ESLint; axe accessibility checks in E2E; lazy-load crypto (main bundle 905 kB / 304 kB gz)
+- [x] Lint, axe checks in E2E, route-level code splitting (Phase 8)
 - [x] Account export & deletion (Phase 9)
 
 ## Phase 2 — Music workspace
@@ -43,7 +43,7 @@ Last updated: 2026-11-02 (session 13). Tests: 117 unit/API (crypto 21, shared 4,
 - [x] Player: queue, play/pause, prev/next, scrubbable waveform (pointer + keyboard slider), volume, repeat, speed (pitch preserved); byte-exact lossless decrypt (E2E)
 - [x] Version history: append-only (DB trigger), upload new version, play any version, make current
 - [x] AIFF uploads keep the original; other browsers play an in-browser WAV rewrite (Phase 11)
-- [ ] Artwork upload (cropper ready; needs encrypted image files), track rename UI
+- [x] Artwork upload (session 13) · [x] track rename (session 14)
 - [x] Service-Worker range streaming: playback starts after the first decrypted chunk (~1.4 s locally incl. key setup); next track pre-warmed; blob fallback (`src/sw.ts`, `lib/stream.ts`)
 - [x] Detailed canvas waveforms (1600 buckets, peak + RMS); loudness (BS.1770 LUFS), sample peak, bit depth in version insights
 - [x] Track reorder by drag (live FLIP) and keyboard on the handle; persisted; row click plays; ⋯ menu per track
@@ -66,7 +66,7 @@ Last updated: 2026-11-02 (session 13). Tests: 117 unit/API (crypto 21, shared 4,
 - [x] Time-coded comments per version: replies (one level), resolve/reopen, edit, delete, waveform markers, jump-to-time; encrypted
 - [x] Share links: fragment secret, optional password, expiry, download button, guest comments; payload refreshed when tracks change; streaming via the service worker with a share token
 - [x] Public listening for public projects (published link; not E2EE by design, stated in the UI) — profiles and Discover link to `/listen/<id>`
-- [ ] Invite by email or invite link (email provider-gated)
+- [x] Invite links (/join/<id>#secret: keyring sealed with a key from the fragment; limited uses, 7-day expiry, revoked by any key rotation; newcomers sign up and come straight back) (session 14) · [!] invite by email (email provider)
 
 ## Phase 4 — Social
 - [x] Profiles (session 6) · [x] listening from profiles · [x] follows · [x] friends (request/accept) · [x] blocks (end follows/friendships, hide from lookup) · [x] reports · [x] FTS5 discovery of public projects and people · [x] notifications (Activity page, bell with unread count)
@@ -94,6 +94,12 @@ Last updated: 2026-11-02 (session 13). Tests: 117 unit/API (crypto 21, shared 4,
 - [x] Accessibility: axe (WCAG 2.0–2.2 A/AA) on 13 screens + overlays at 360/768/1280 px — zero serious/critical (`e2e/a11y-flow.mjs`); fixed cover-title contrast
 - [x] Security suite mapping (RELEASE_CHECKLIST.md) · [x] RUNBOOK.md (deploy, secrets, backups, restore drill, incidents, capacity) · [x] RELEASE_CHECKLIST.md
 - [ ] Manual device pass (iPhone/Android/Safari/Firefox) and first restore drill — owner, see checklist
+
+## Session 14 additions
+- [x] Bring-your-own storage: connect Dropbox (PKCE, app folder) or Google Drive (drive.file scope); audio encrypted in the browser and uploaded as one file into “Arai (encrypted)”; Arai relays byte ranges from a read link so every member can play; not counted toward the Arai quota; uploader's browser deletes the cloud copy with the track; tokens stored encrypted with a key derived from the account key (migration 0014; API tests; Dropbox E2E against a local mock). [!] Needs the owner to register the apps (RUNBOOK). Google Drive upload path is untested end to end.
+- [x] Lock screen / Now Playing shows the project's artwork (Media Session)
+- [x] First-run guide drawn over the app (spotlights), reopened from a Help button
+- [x] iOS: solid black status bar; no fade under the top bar
 
 ## Phases 9–14 (defined in session 13; the original spec ends at phase 8)
 The owner asked to continue to phase 14. These phases take the remaining backlog in a sensible order.

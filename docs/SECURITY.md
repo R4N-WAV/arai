@@ -145,6 +145,36 @@ long-term key, which re-seals project keys to the new device).
   any stay-signed-in app; script running in the page could already use the
   in-memory keys, so XSS exposure is unchanged.
 
+### 3.5c Two-factor sign-in (TOTP)
+Optional authenticator-app codes (RFC 6238, SHA-1, 30 s, ±1 step). The secret
+is sealed at rest with AES-GCM under a key derived from `AUTH_PEPPER` (bound
+to the user id), so a database copy alone does not reveal it. After a correct
+password the login answers `mfa_required` and releases nothing (no vault blob)
+until a fresh code or an unused recovery code is given; used steps are
+refused (`last_step`, guarded update), attempts are rate-limited, failures are
+logged. Ten recovery codes are HMAC-hashed and single use. TOTP protects the
+sign-in; the encryption keys still come only from the password.
+
+### 3.5d Invite links
+`/join/<id>#<secret>`: the project keyring is sealed with a key derived from
+the fragment secret; the server stores SHA-256 of the derived token. A
+signed-in person with the full link receives the keys and joins by sealing
+them to themselves (self-signed grants). Anyone holding the link can join
+until it is used up (1/5/25), expires (7 days) or is turned off, and every key
+rotation revokes all invite links (they carry old keys).
+
+### 3.5e Bring-your-own storage (Dropbox / Google Drive)
+Audio is encrypted in the browser exactly as for Arai storage and uploaded as
+one ciphertext file to the user's own cloud (Dropbox app folder; Drive with
+the `drive.file` scope, so Arai cannot see the rest of the user's Drive).
+Arai keeps a read link (Dropbox share link / Drive file id) and relays byte
+ranges; references are validated and URLs rebuilt on fixed hosts (no SSRF).
+Dropbox/Google see file sizes and times only. The OAuth refresh token is
+stored encrypted under a key derived from the account key; Google's token
+exchange passes through the Worker (it needs the client secret) without
+being stored. Anyone holding a read link can fetch the ciphertext, which is
+useless without the keys. `DROPBOX_DL_ORIGIN` exists only for local tests.
+
 ### 3.5b Web Push
 Pushes carry no payload. The service worker fetches `/api/push/summary`
 with the device's session and shows names and counts only. Subscription

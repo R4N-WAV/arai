@@ -5,7 +5,7 @@
  * of the derived access token and the payload encrypted with the link key).
  */
 import { createGrant, deriveShareKeys, fromBase64Url, newShareSecret, openJson, sealJson, shareTokenHash, toBase64Url, type AccountKeys } from '@arai/crypto';
-import type { CommentBody, CommentDto, MemberDto, ShareDto, SharePayload, UserKeysDto } from '@arai/shared';
+import type { CommentBody, CommentDto, InviteLinkDto, InvitePayload, MemberDto, ShareDto, SharePayload, UserKeysDto } from '@arai/shared';
 import { api } from './api';
 import { keyFor, newProjectId as newId, projectKey, type Project } from './projects';
 import { fileKeyOf, type Track } from './tracks';
@@ -280,4 +280,71 @@ export async function addGuestComment(s: OpenedShare, versionId: string, body: C
     encBody: await toBase64Url(await sealJson(s.key, body, guestCommentCtx(s.linkId, id))),
   });
   return decodeComment(comment, s.key, guestCommentCtx(s.linkId, id));
+}
+
+// ---- invite links ---------------------------------------------------------------------
+const invitePayloadCtx = (id: string) => `invite/${id}/payload`;
+const inviteSecretCtx = (id: string) => `invite/${id}/secret`;
+export const inviteUrl = (id: string, secret: string) => `${location.origin}/join/${id}#${secret}`;
+
+export interface InviteLink extends InviteLinkDto {
+  url: string | null;
+}
+
+/** A link that lets anyone with an Arai account join; it carries the project keys in its secret part. */
+export async function createInviteLink(p: Project, role: 'listener' | 'editor', maxUses: number, expiresInDays: number): Promise<string> {
+  const key = projectKey(p);
+  if (!key || !p.meta) throw new Error('locked');
+  const id = newId();
+  const secret = await newShareSecret();
+  const { token, key: linkKey } = await deriveShareKeys(secret);
+  const keys = [];
+  for (let v = 1; v <= p.keyVersion; v++) {
+    const k = keyFor(p.id, v);
+    if (!k) throw new Error('locked');
+    keys.push({ keyVersion: v, key: await toBase64Url(k) });
+  }
+  const payload: InvitePayload = { projectId: p.id, name: p.meta.name, keys };
+  await api('POST', `/projects/${p.id}/invite-links`, {
+    id,
+    role,
+    tokenHash: await toBase64Url(await shareTokenHash(token)),
+    encPayload: await toBase64Url(await sealJson(linkKey, payload, invitePayloadCtx(id))),
+    encSecret: await toBase64Url(await sealJson(key, { s: secret }, inviteSecretCtx(id))),
+    keyVersion: p.keyVersion,
+    maxUses,
+    expiresInDays,
+  });
+  return inviteUrl(id, secret);
+}
+
+export async function listInviteLinks(p: Project): Promise<InviteLink[]> {
+  const { links } = await api<{ links: InviteLinkDto[] }>('GET', `/projects/${p.id}/invite-links`);
+  return Promise.all(
+    links.map(async (l) => {
+      const k = keyFor(p.id, l.keyVersion);
+      const s = k ? await openJson<{ s: string }>(k, await fromBase64Url(l.encSecret), inviteSecretCtx(l.id)).catch(() => null) : null;
+      return { ...l, url: s ? inviteUrl(l.id, s.s) : null };
+    }),
+  );
+}
+export const revokeInviteLink = (p: Project, id: string) => api('DELETE', `/projects/${p.id}/invite-links/${id}`);
+
+export async function openInvite(linkId: string, secret: string): Promise<{ payload: InvitePayload; role: string; alreadyMember: boolean; token: string }> {
+  const { token, key } = await deriveShareKeys(secret);
+  const t = await toBase64Url(token);
+  const r = await api<{ encPayload: string; role: string; alreadyMember: boolean }>('POST', `/join/${linkId}/open`, { token: t });
+  const payload = await openJson<InvitePayload>(key, await fromBase64Url(r.encPayload), invitePayloadCtx(linkId));
+  return { payload, role: r.role, alreadyMember: r.alreadyMember, token: t };
+}
+
+/** Joins: re-seals every key version to yourself (signed by you) and registers membership. */
+export async function joinWithInvite(linkId: string, opened: { payload: InvitePayload; token: string }, keys: AccountKeys, myId: string): Promise<string> {
+  const grants = await Promise.all(
+    opened.payload.keys.map(async (k) => {
+      const g = await createGrant(keys, keys.box.publicKey, 'project', opened.payload.projectId, k.keyVersion, myId, await fromBase64Url(k.key));
+      return { keyVersion: k.keyVersion, wrappedKey: await toBase64Url(g.wrapped), signature: await toBase64Url(g.signature) };
+    }),
+  );
+  return (await api<{ projectId: string }>('POST', `/join/${linkId}`, { token: opened.token, grants })).projectId;
 }

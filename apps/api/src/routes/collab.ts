@@ -4,6 +4,8 @@
  * grants and SHA-256 hashes of share tokens; every key is made client-side.
  */
 import {
+  createInviteLinkRequest,
+  joinRequest,
   createCommentRequest,
   createShareRequest,
   guestCommentRequest,
@@ -29,8 +31,8 @@ import { rateLimit } from '../lib/ratelimit.js';
 import { clientIp, requireUser, type AuthedBindings } from '../lib/session.js';
 import { parseBody } from '../lib/validate.js';
 import { ACCEPTED, PROJECT_SELECT, projectDtos, type ProjectRow } from './projects.js';
-import { notify } from './social.js';
-import { countPlay } from './tracks.js';
+import { isBlocked, notify } from './social.js';
+import { countPlay, readChunk } from './tracks.js';
 
 const collab = new Hono<AuthedBindings>();
 for (const p of ['/users/lookup/*', '/projects/:id/members', '/projects/:id/members/*', '/projects/:id/rotate', '/invites', '/invites/*', '/versions/*', '/comments/*', '/projects/:id/shares', '/projects/:id/shares/*']) {
@@ -192,6 +194,8 @@ collab.post('/projects/:id/rotate', async (c) => {
     await c.env.DB.batch([
       // Guarded on the old version so two concurrent rotations cannot both win.
       c.env.DB.prepare('UPDATE projects SET key_version = ?, enc_meta = ?, rotation_due = 0, updated_at = ? WHERE id = ? AND key_version = ?').bind(body.keyVersion, fromB64(body.encMeta), now, id, body.keyVersion - 1),
+      // Invite links carry the old keyring: they stop working with a new key.
+      c.env.DB.prepare('UPDATE invite_links SET revoked_at = ? WHERE project_id = ? AND revoked_at IS NULL').bind(now, id),
       ...body.grants.map((x) =>
         c.env.DB.prepare('INSERT INTO project_keys (project_id, key_version, user_id, wrapped_key, granted_by, grant_sig, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(
           id, body.keyVersion, x.userId, fromB64(x.wrappedKey), me, fromB64(x.signature), now,
@@ -526,14 +530,14 @@ collab.get('/share/:linkId/files/:fileId/chunks/:idx', async (c) => {
   const link = await liveLink(c.env.DB, c.req.param('linkId'));
   if (!link || !(await tokenOk(link, c.req.header('X-Share-Token')))) return notFound(c);
   const file = await c.env.DB.prepare(
-    "SELECT f.id, f.chunk_count FROM share_link_files s JOIN files f ON f.id = s.file_id AND f.status = 'ready' WHERE s.link_id = ? AND s.file_id = ?",
+    "SELECT f.id, f.project_id, f.chunk_count, f.enc_size, f.storage, f.remote_ref FROM share_link_files s JOIN files f ON f.id = s.file_id AND f.status = 'ready' WHERE s.link_id = ? AND s.file_id = ?",
   )
     .bind(link.id, c.req.param('fileId'))
-    .first<{ id: string; chunk_count: number }>();
+    .first<{ id: string; project_id: string; chunk_count: number; enc_size: number; storage: 'arai' | 'dropbox' | 'gdrive'; remote_ref: string | null }>();
   if (!file) return notFound(c);
   const idx = Number(c.req.param('idx'));
   if (!Number.isInteger(idx) || idx < 0 || idx >= file.chunk_count) return bad(c);
-  const data = await c.env.FILES.get(c.env.FILES.idFromName(link.project_id)).getChunk(file.id, idx);
+  const data = await readChunk(c.env, file, idx);
   if (!data) return notFound(c);
   return new Response(data, { headers: { 'Content-Type': 'application/octet-stream', 'Cache-Control': 'private, no-store' } });
 });
@@ -593,6 +597,105 @@ collab.get('/public/projects/:id/art', async (c) => {
   if (!row) return notFound(c);
   // URLs carry ?v=<updated_at>; images are public by the owner's choice.
   return new Response(new Uint8Array(row.public_data as ArrayLike<number>), { headers: { 'Content-Type': row.public_mime, 'Cache-Control': 'public, max-age=31536000, immutable', 'Content-Disposition': 'inline' } });
+});
+
+// ---- invite links -------------------------------------------------------------------
+collab.use('/projects/:id/invite-links', requireUser);
+collab.use('/projects/:id/invite-links/*', requireUser);
+collab.use('/join/*', requireUser);
+
+collab.get('/projects/:id/invite-links', async (c) => {
+  const id = c.req.param('id');
+  const g = await gate(c, id, 'admin');
+  if (!g.ok) return g.res;
+  const { results } = await c.env.DB.prepare(
+    'SELECT id, role, max_uses, uses, expires_at, enc_secret, key_version, created_at FROM invite_links WHERE project_id = ? AND revoked_at IS NULL AND expires_at > ? AND uses < max_uses ORDER BY created_at DESC',
+  )
+    .bind(id, Date.now())
+    .all<{ id: string; role: 'listener' | 'editor'; max_uses: number; uses: number; expires_at: number; enc_secret: ArrayBuffer; key_version: number; created_at: number }>();
+  return c.json({ links: results.map((r) => ({ id: r.id, role: r.role, maxUses: r.max_uses, uses: r.uses, expiresAt: r.expires_at, encSecret: toB64(r.enc_secret), keyVersion: r.key_version, createdAt: r.created_at })) });
+});
+
+collab.post('/projects/:id/invite-links', async (c) => {
+  const id = c.req.param('id');
+  const g = await gate(c, id, 'admin');
+  if (!g.ok) return g.res;
+  const body = await parseBody(c, createInviteLinkRequest);
+  if (!body) return bad(c);
+  const me = c.get('session').user_id;
+  if (c.get('session').status === 'restricted') return c.json({ error: 'account_restricted' }, 403);
+  if (!(await rateLimit(c.env.DB, `invite-link:${me}`, 30, 3600_000))) return c.json({ error: 'too_many_attempts' }, 429);
+  const p = await c.env.DB.prepare('SELECT key_version FROM projects WHERE id = ?').bind(id).first<{ key_version: number }>();
+  if (body.keyVersion !== p!.key_version) return c.json({ error: 'stale_key' }, 409);
+  const now = Date.now();
+  await c.env.DB.prepare(
+    'INSERT INTO invite_links (id, project_id, role, created_by, token_hash, enc_payload, enc_secret, key_version, max_uses, expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+  )
+    .bind(body.id, id, body.role, me, fromB64(body.tokenHash), fromB64(body.encPayload), fromB64(body.encSecret), body.keyVersion, body.maxUses, now + body.expiresInDays * 86400_000, now)
+    .run();
+  await appendAudit(c.env.DB, { actorId: me, action: 'project.invite_link', target: id, details: { role: body.role, maxUses: body.maxUses } });
+  return c.json({ ok: true }, 201);
+});
+
+collab.delete('/projects/:id/invite-links/:linkId', async (c) => {
+  const id = c.req.param('id');
+  const g = await gate(c, id, 'admin');
+  if (!g.ok) return g.res;
+  await c.env.DB.prepare('UPDATE invite_links SET revoked_at = ? WHERE id = ? AND project_id = ?').bind(Date.now(), c.req.param('linkId'), id).run();
+  return c.json({ ok: true });
+});
+
+interface LiveInvite { id: string; project_id: string; role: 'listener' | 'editor'; token_hash: ArrayBuffer; enc_payload: ArrayBuffer; key_version: number; uses: number; max_uses: number }
+async function liveInvite(db: D1Database, id: string): Promise<LiveInvite | null> {
+  return db
+    .prepare(
+      `SELECT l.id, l.project_id, l.role, l.token_hash, l.enc_payload, l.key_version, l.uses, l.max_uses FROM invite_links l JOIN projects p ON p.id = l.project_id AND p.deleted_at IS NULL AND p.key_version = l.key_version
+        WHERE l.id = ? AND l.revoked_at IS NULL AND l.expires_at > ? AND l.uses < l.max_uses`,
+    )
+    .bind(id, Date.now())
+    .first<LiveInvite>();
+}
+
+collab.post('/join/:linkId/open', async (c) => {
+  const body = await parseBody(c, openShareRequest);
+  if (!body) return bad(c);
+  const me = c.get('session').user_id;
+  if (!(await rateLimit(c.env.DB, `join:${me}`, 30, 900_000))) return c.json({ error: 'too_many_attempts' }, 429);
+  const l = await liveInvite(c.env.DB, c.req.param('linkId'));
+  if (!l || !timingSafeEqual(await sha256(fromB64(body.token)), new Uint8Array(l.token_hash))) return c.json({ error: 'link_unavailable' }, 404);
+  const member = await c.env.DB.prepare('SELECT accepted_at FROM project_members WHERE project_id = ? AND user_id = ? AND revoked_at IS NULL').bind(l.project_id, me).first<{ accepted_at: number | null }>();
+  return c.json({ encPayload: toB64(l.enc_payload), role: l.role, keyVersion: l.key_version, alreadyMember: !!member?.accepted_at });
+});
+
+collab.post('/join/:linkId', async (c) => {
+  const body = await parseBody(c, joinRequest);
+  if (!body) return bad(c);
+  const me = c.get('session').user_id;
+  if (!(await rateLimit(c.env.DB, `join:${me}`, 30, 900_000))) return c.json({ error: 'too_many_attempts' }, 429);
+  const l = await liveInvite(c.env.DB, c.req.param('linkId'));
+  if (!l || !timingSafeEqual(await sha256(fromB64(body.token)), new Uint8Array(l.token_hash))) return c.json({ error: 'link_unavailable' }, 404);
+  const owner = await c.env.DB.prepare('SELECT owner_id FROM projects WHERE id = ?').bind(l.project_id).first<{ owner_id: string }>();
+  if (await isBlocked(c.env.DB, me, owner!.owner_id)) return c.json({ error: 'link_unavailable' }, 404);
+  const existing = await c.env.DB.prepare('SELECT revoked_at, accepted_at FROM project_members WHERE project_id = ? AND user_id = ?').bind(l.project_id, me).first<{ revoked_at: number | null; accepted_at: number | null }>();
+  if (existing && existing.revoked_at === null && existing.accepted_at) return c.json({ error: 'already_member' }, 409);
+  const versions = new Set(body.grants.map((g) => g.keyVersion));
+  if (versions.size !== body.grants.length || versions.size !== l.key_version) return c.json({ error: 'grants_incomplete' }, 409);
+  const now = Date.now();
+  // Claim one use atomically, then add the member with self-sealed grants.
+  const claim = await c.env.DB.prepare('UPDATE invite_links SET uses = uses + 1 WHERE id = ? AND uses < max_uses AND revoked_at IS NULL').bind(l.id).run();
+  if (!claim.meta.changes) return c.json({ error: 'link_unavailable' }, 404);
+  await c.env.DB.batch([
+    existing
+      ? c.env.DB.prepare('UPDATE project_members SET role = ?, added_by = ?, created_at = ?, accepted_at = ?, revoked_at = NULL WHERE project_id = ? AND user_id = ?').bind(l.role, me, now, now, l.project_id, me)
+      : c.env.DB.prepare('INSERT INTO project_members (project_id, user_id, role, added_by, created_at, accepted_at) VALUES (?, ?, ?, ?, ?, ?)').bind(l.project_id, me, l.role, me, now, now),
+    c.env.DB.prepare('DELETE FROM project_keys WHERE project_id = ? AND user_id = ?').bind(l.project_id, me),
+    ...body.grants.map((g) =>
+      c.env.DB.prepare('INSERT INTO project_keys (project_id, key_version, user_id, wrapped_key, granted_by, grant_sig, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(l.project_id, g.keyVersion, me, fromB64(g.wrappedKey), me, fromB64(g.signature), now),
+    ),
+  ]);
+  await appendAudit(c.env.DB, { actorId: me, action: 'project.join_link', target: l.project_id, details: { link: l.id } });
+  await notify(c.env.DB, owner!.owner_id, 'invite', me, l.project_id, c.var.wake);
+  return c.json({ projectId: l.project_id });
 });
 
 /** Public listening: the link of a public project, secret included (public by the owner's choice). */

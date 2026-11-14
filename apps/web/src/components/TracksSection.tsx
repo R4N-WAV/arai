@@ -4,7 +4,7 @@ import { formatBytes, formatTime } from '../lib/audio';
 import { useFlip } from '../lib/flip';
 import { usePlayer } from '../lib/player';
 import type { Project } from '../lib/projects';
-import { downloadOriginal } from '../lib/tracks';
+import { downloadOriginal, renameTrack } from '../lib/tracks';
 import { decodeWave, deleteTrack, loadTracks, makeCurrent, UPLOAD_ERRORS, UploadJob, type Track, type TrackVersion, type WaveData } from '../lib/tracks';
 import { Menu } from './Menu';
 import { Modal } from './Modal';
@@ -73,6 +73,8 @@ function TrackRow(props: {
   const [confirm, setConfirm] = useState(false);
   const [trimming, setTrimming] = useState<TrackVersion | null>(null);
   const [comparing, setComparing] = useState(false);
+  const [renaming, setRenaming] = useState<string | null>(null);
+  const [renameError, setRenameError] = useState<string | null>(null);
   const [offline, setOffline] = useState(() => (t.current ? isOffline(t.current.file.id) : false));
   const [saving, setSaving] = useState<number | null>(null);
   const active = player.item?.track.id === t.id;
@@ -143,6 +145,7 @@ function TrackRow(props: {
           items={[
             { label: open ? 'Hide versions' : 'Versions and insights', onSelect: props.onToggle },
             ...(canEdit ? [{ label: 'Upload new version', onSelect: props.onNewVersion }] : []),
+            ...(canEdit ? [{ label: 'Rename…', onSelect: () => (setRenaming(t.title), setRenameError(null)) }] : []),
             ...(canEdit && t.current?.meta?.duration ? [{ label: 'Trim…', onSelect: () => setTrimming(t.current) }] : []),
             ...(t.versions.length > 1 ? [{ label: 'Compare versions…', onSelect: () => setComparing(true) }] : []),
             ...(t.current ? [{ label: 'Download original', onSelect: () => void downloadOriginal(props.project, t.current!) }] : []),
@@ -215,6 +218,32 @@ function TrackRow(props: {
           </div>
         )}
       </div>
+      {renaming !== null && (
+        <Modal open onClose={() => setRenaming(null)} title="Rename track">
+          <form
+            className="share-form"
+            onSubmit={async (e) => {
+              e.preventDefault();
+              const title = renaming.trim();
+              if (!title) return;
+              try {
+                props.onChanged(await renameTrack(props.project, t, title.slice(0, 200)));
+                setRenaming(null);
+              } catch (err) {
+                setRenameError(errorMessage(err));
+              }
+            }}
+          >
+            {renameError && <Notice kind="error">{renameError}</Notice>}
+            <label className="field">
+              <span className="field-label">Title</span>
+              <input className="input" value={renaming} onChange={(e) => setRenaming(e.target.value)} maxLength={200} autoFocus />
+            </label>
+            <p className="row-sub">Encrypted with the project key like everything else about the track.</p>
+            <button type="submit" className="btn btn-primary btn-sm" disabled={!renaming.trim()}>Save</button>
+          </form>
+        </Modal>
+      )}
       {comparing && <CompareDialog project={props.project} track={t} open onClose={() => setComparing(false)} />}
       {trimming && <TrimDialog project={props.project} track={t} version={trimming} open onClose={() => setTrimming(null)} onSaved={props.onChanged} />}
     </li>

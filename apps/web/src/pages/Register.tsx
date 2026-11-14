@@ -6,6 +6,7 @@ import { Notice } from '../components/Unavailable';
 import { prepareRegistration, setHoneypot, type PreparedRegistration } from '../lib/account';
 import { api, errorMessage } from '../lib/api';
 import { useSession } from '../lib/session';
+import { takeReturnPath } from './Join';
 import { AuthLayout, Busy } from './AuthLayout';
 
 const PW_TEXT: Record<string, string> = {
@@ -65,7 +66,7 @@ export function Register() {
       const keys = await prepared.submit();
       const s = await api<{ user: Parameters<typeof setSignedIn>[0] }>('GET', '/auth/session');
       setSignedIn(s.user, keys);
-      nav('/');
+      nav(takeReturnPath());
     } catch (err) {
       setError(errorMessage(err));
     } finally {

@@ -11,6 +11,13 @@ export interface Env {
   GIF_API_KEY?: string;
   /** P-256 private key (JWK JSON) for Web Push (VAPID). Created by the deploy job. */
   VAPID_PRIVATE_JWK?: string;
+  /** Bring-your-own storage (public client ids; Google also needs a secret for the token exchange and an API key for reads). */
+  DROPBOX_APP_KEY?: string;
+  GOOGLE_CLIENT_ID?: string;
+  GOOGLE_CLIENT_SECRET?: string;
+  GOOGLE_API_KEY?: string;
+  /** Local E2E only: where Dropbox share downloads are fetched from. Never set in production. */
+  DROPBOX_DL_ORIGIN?: string;
   REQUIRE_TURNSTILE?: 'true' | 'false';
   TURNSTILE_SITE_KEY?: string;
   AUTH_PEPPER?: string;

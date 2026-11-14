@@ -4,6 +4,7 @@ import type { Env } from '../env.js';
 import { fromB64, toB64 } from '../lib/crypto.js';
 import { requireProjectRole } from '../lib/projects.js';
 import { requireUser, type AuthedBindings } from '../lib/session.js';
+import { fetchRemoteChunk, remoteSizeOk, validRemoteRef, type Remote } from '../lib/remote.js';
 import { parseBody } from '../lib/validate.js';
 
 const tracks = new Hono<AuthedBindings>();
@@ -20,6 +21,14 @@ interface FileRow {
   status: string;
   enc_size: number;
   chunk_count: number;
+  storage: 'arai' | Remote;
+  remote_ref: string | null;
+}
+
+/** One encrypted chunk, from Arai's storage or relayed from the uploader's own cloud. */
+export async function readChunk(env: Env, file: Pick<FileRow, 'id' | 'project_id' | 'enc_size' | 'storage' | 'remote_ref'>, idx: number): Promise<ArrayBuffer | null> {
+  if (file.storage === 'arai') return store(env, file.project_id).getChunk(file.id, idx);
+  return fetchRemoteChunk(env, file.storage, file.remote_ref ?? '', file.enc_size, idx);
 }
 
 /** 404 for outsiders, 403 for members without the role. */
@@ -32,16 +41,16 @@ async function gate(c: Context<AuthedBindings>, projectId: string, min: 'listene
 }
 
 async function loadFile(db: D1Database, id: string): Promise<FileRow | null> {
-  return db.prepare("SELECT id, project_id, uploader_id, status, enc_size, chunk_count FROM files WHERE id = ? AND status != 'deleted'").bind(id).first<FileRow>();
+  return db.prepare("SELECT id, project_id, uploader_id, status, enc_size, chunk_count, storage, remote_ref FROM files WHERE id = ? AND status != 'deleted'").bind(id).first<FileRow>();
 }
 
 export async function usage(db: D1Database, userId: string) {
   const mine = await db
-    .prepare("SELECT (SELECT COALESCE(SUM(enc_size), 0) FROM files WHERE uploader_id = ?1 AND status != 'deleted') + (SELECT COALESCE(SUM(enc_size), 0) FROM conv_files WHERE uploader_id = ?1 AND status != 'deleted') AS n")
+    .prepare("SELECT (SELECT COALESCE(SUM(enc_size), 0) FROM files WHERE uploader_id = ?1 AND status != 'deleted' AND storage = 'arai') + (SELECT COALESCE(SUM(enc_size), 0) FROM conv_files WHERE uploader_id = ?1 AND status != 'deleted') AS n")
     .bind(userId)
     .first<{ n: number }>();
   const all = await db
-    .prepare("SELECT (SELECT COALESCE(SUM(enc_size), 0) FROM files WHERE status != 'deleted') + (SELECT COALESCE(SUM(enc_size), 0) FROM conv_files WHERE status != 'deleted') AS n")
+    .prepare("SELECT (SELECT COALESCE(SUM(enc_size), 0) FROM files WHERE status != 'deleted' AND storage = 'arai') + (SELECT COALESCE(SUM(enc_size), 0) FROM conv_files WHERE status != 'deleted') AS n")
     .first<{ n: number }>();
   return { mine: mine?.n ?? 0, all: all?.n ?? 0 };
 }
@@ -62,6 +71,22 @@ tracks.post('/projects/:id/files', async (c) => {
   const userId = c.get('session').user_id;
   const project = await c.env.DB.prepare('SELECT key_version FROM projects WHERE id = ?').bind(projectId).first<{ key_version: number }>();
   if (body.keyVersion !== project!.key_version) return c.json({ error: 'stale_key' }, 409);
+  if (body.storage !== 'arai') {
+    // The uploader's own cloud: the file is already there (ciphertext). Check it, then it is ready.
+    const linked = await c.env.DB.prepare('SELECT 1 FROM storage_accounts WHERE user_id = ? AND provider = ?').bind(userId, body.storage).first();
+    if (!linked || !validRemoteRef(body.storage, body.remoteRef!)) return bad(c);
+    if (!(await remoteSizeOk(c.env, body.storage, body.remoteRef!, body.encSize))) return c.json({ error: 'remote_unreadable' }, 409);
+    try {
+      await c.env.DB.prepare(
+        `INSERT INTO files (id, project_id, uploader_id, kind, enc_size, chunk_count, enc_file_key, key_version, status, storage, remote_ref, created_at, completed_at)
+         VALUES (?, ?, ?, 'audio', ?, ?, ?, ?, 'ready', ?, ?, ?, ?)`,
+      ).bind(body.id, projectId, userId, body.encSize, body.chunkCount, fromB64(body.encFileKey), body.keyVersion, body.storage, body.remoteRef, Date.now(), Date.now()).run();
+    } catch (e) {
+      if (String(e).includes('UNIQUE') || String(e).includes('PRIMARY')) return c.json({ error: 'id_taken' }, 409);
+      throw e;
+    }
+    return c.json({ ok: true, status: 'ready' }, 201);
+  }
   const u = await usage(c.env.DB, userId);
   if (u.mine + body.encSize > Number(c.env.USER_QUOTA_BYTES)) return c.json({ error: 'quota_exceeded' }, 413);
   if (u.all + body.encSize > Number(c.env.PLATFORM_QUOTA_BYTES)) return c.json({ error: 'storage_full' }, 507);
@@ -83,7 +108,7 @@ tracks.put('/files/:fileId/chunks/:idx', async (c) => {
   const g = await gate(c, file.project_id, 'editor');
   if (!g.ok) return g.res;
   if (file.uploader_id !== c.get('session').user_id) return c.json({ error: 'forbidden' }, 403);
-  if (file.status !== 'pending') return c.json({ error: 'already_complete' }, 409);
+  if (file.status !== 'pending' || file.storage !== 'arai') return c.json({ error: 'already_complete' }, 409);
   const idx = Number(c.req.param('idx'));
   if (!Number.isInteger(idx) || idx < 0 || idx >= file.chunk_count) return bad(c);
   const expected = expectedChunkSize(file.enc_size, file.chunk_count, idx);
@@ -125,8 +150,8 @@ tracks.get('/files/:fileId/chunks/:idx', async (c) => {
   if (!g.ok) return g.res;
   const idx = Number(c.req.param('idx'));
   if (!Number.isInteger(idx) || idx < 0 || idx >= file.chunk_count) return bad(c);
-  const data = await store(c.env, file.project_id).getChunk(file.id, idx);
-  if (!data) return notFound(c);
+  const data = await readChunk(c.env, file, idx);
+  if (!data) return file.storage === 'arai' ? notFound(c) : c.json({ error: 'remote_unavailable' }, 502);
   // Ciphertext of an immutable chunk: safe for the browser's private cache.
   return new Response(data, { headers: { 'Content-Type': 'application/octet-stream', 'Cache-Control': 'private, max-age=31536000, immutable' } });
 });
@@ -154,12 +179,12 @@ export async function listTracks(db: D1Database, projectId: string, trackId?: st
   if (t.results.length === 0) return [];
   const v = await db
     .prepare(
-      `SELECT v.id, v.track_id, v.number, v.enc_meta, v.key_version AS meta_key_version, v.created_by, v.created_at, f.id AS file_id, f.enc_size, f.chunk_count, f.enc_file_key, f.key_version
+      `SELECT v.id, v.track_id, v.number, v.enc_meta, v.key_version AS meta_key_version, v.created_by, v.created_at, f.id AS file_id, f.enc_size, f.chunk_count, f.enc_file_key, f.key_version, f.storage, f.remote_ref
          FROM track_versions v JOIN tracks t ON t.id = v.track_id JOIN files f ON f.id = v.file_id
         WHERE t.project_id = ? AND t.deleted_at IS NULL ORDER BY v.number`,
     )
     .bind(projectId)
-    .all<{ id: string; track_id: string; number: number; enc_meta: ArrayBuffer; meta_key_version: number; created_by: string; created_at: number; file_id: string; enc_size: number; chunk_count: number; enc_file_key: ArrayBuffer; key_version: number }>();
+    .all<{ id: string; track_id: string; number: number; enc_meta: ArrayBuffer; meta_key_version: number; created_by: string; created_at: number; file_id: string; enc_size: number; chunk_count: number; enc_file_key: ArrayBuffer; key_version: number; storage: 'arai' | Remote; remote_ref: string | null }>();
   return t.results.map((r) => ({
     id: r.id,
     encMeta: toB64(r.enc_meta),
@@ -177,7 +202,7 @@ export async function listTracks(db: D1Database, projectId: string, trackId?: st
         keyVersion: x.meta_key_version,
         createdBy: x.created_by,
         createdAt: x.created_at,
-        file: { id: x.file_id, encSize: x.enc_size, chunkCount: x.chunk_count, encFileKey: toB64(x.enc_file_key), keyVersion: x.key_version },
+        file: { id: x.file_id, encSize: x.enc_size, chunkCount: x.chunk_count, encFileKey: toB64(x.enc_file_key), keyVersion: x.key_version, storage: x.storage, remoteRef: x.remote_ref },
       })),
   }));
 }
@@ -285,6 +310,7 @@ export async function purgeFiles(env: Env, ctx: { waitUntil(p: Promise<unknown>)
   if (fileIds.length === 0) return;
   const now = Date.now();
   await env.DB.batch(fileIds.map((id) => env.DB.prepare("UPDATE files SET status = 'deleted', deleted_at = ? WHERE id = ?").bind(now, id)));
+  // Files in someone's own cloud are removed by their browser (Arai holds no write access).
   ctx.waitUntil(Promise.all(fileIds.map((id) => store(env, projectId).deleteFile(id))));
 }
 

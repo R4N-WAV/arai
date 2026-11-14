@@ -70,6 +70,9 @@ export const loginRequest = z.object({
   identifier,
   authKey: KEY,
   turnstileToken: z.string().max(4096).optional(),
+  /** Second factor, when the account has an authenticator app. */
+  totpCode: z.string().regex(/^\d{6}$/).optional(),
+  mfaRecoveryCode: z.string().max(20).optional(),
 });
 
 export const recoverChallengeRequest = z.object({ username, recoveryAuthKey: KEY });
@@ -96,6 +99,8 @@ export interface Capabilities {
   sms: boolean; // SMS 2FA
   gifs: boolean; // GIF search (needs a provider key)
   push: boolean; // Web Push (VAPID key configured)
+  /** Bring-your-own storage; ids are public OAuth client identifiers. */
+  storage: { dropbox: string | null; gdrive: string | null };
   turnstileSiteKey: string | null;
 }
 
@@ -133,3 +138,8 @@ export const changeUsernameRequest = z.object({ username, currentAuthKey: KEY })
 export const deleteAccountRequest = z.object({ currentAuthKey: KEY, confirm: z.literal('delete my account') });
 export const prefsRequest = z.object({ encData: b64(41, 48 * 1024) });
 export const pushSubscriptionRequest = z.object({ endpoint: z.string().url().max(1000) });
+export const totpSetupRequest = z.object({ currentAuthKey: KEY });
+export const totpEnableRequest = z.object({ code: z.string().regex(/^\d{6}$/) });
+export const storageTokenRequest = z.object({ encToken: b64(41, 8192) });
+export const googleTokenRequest = z.object({ code: z.string().min(10).max(2000), codeVerifier: z.string().min(43).max(128), redirectUri: z.string().url().max(300) });
+export const googleRefreshRequest = z.object({ refreshToken: z.string().min(10).max(2000) });

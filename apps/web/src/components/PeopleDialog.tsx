@@ -2,7 +2,7 @@ import type { MemberDto } from '@arai/shared';
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router';
 import { ApiError, errorMessage } from '../lib/api';
-import { inviteMember, listMembers, lookupUser, removeMember, setMemberRole } from '../lib/collab';
+import { createInviteLink, inviteMember, listInviteLinks, listMembers, lookupUser, removeMember, revokeInviteLink, setMemberRole, type InviteLink } from '../lib/collab';
 import { roleWithArticle, useProjects, type Project } from '../lib/projects';
 import { useSession } from '../lib/session';
 import { Modal } from './Modal';
@@ -101,6 +101,7 @@ export function PeopleDialog({ p, open, onClose }: { p: Project; open: boolean; 
           <p className="row-sub">They receive the project key sealed to their account, so the project stays end-to-end encrypted.</p>
         </form>
       )}
+      {canAdmin && <InviteLinks p={p} />}
       <ul className="list member-list" aria-label="Members">
         {(members ?? []).map((m) => (
           <li key={m.id} className="member">
@@ -162,5 +163,76 @@ export function PeopleDialog({ p, open, onClose }: { p: Project; open: boolean; 
         </section>
       )}
     </Modal>
+  );
+}
+
+/** Invite links: for people who are not on Arai yet (they sign up, then join). */
+function InviteLinks({ p }: { p: Project }) {
+  const [links, setLinks] = useState<InviteLink[] | null>(null);
+  const [role, setRole] = useState<'listener' | 'editor'>('listener');
+  const [uses, setUses] = useState(1);
+  const [made, setMade] = useState<string | null>(null);
+  const [copied, setCopied] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
+  const load = useCallback(() => listInviteLinks(p).then(setLinks).catch(() => setLinks([])), [p]);
+  useEffect(() => {
+    if (open) void load();
+  }, [open, load]);
+  const copy = async (url: string) => {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(url);
+      setTimeout(() => setCopied(null), 1800);
+    } catch {
+      setError('Copying is blocked here; select the link and copy it yourself.');
+    }
+  };
+  if (!open) {
+    return (
+      <p className="form-actions people-chat">
+        <button type="button" className="btn btn-sm" onClick={() => setOpen(true)}>Invite link…</button>
+        <span className="row-sub">For people who are not on Arai yet.</span>
+      </p>
+    );
+  }
+  return (
+    <section className="modal-section invite-links" aria-labelledby="il-h">
+      <h3 id="il-h">Invite link</h3>
+      <p className="row-sub">Anyone with the link can create an account and join, so send it privately. It carries the project key in the part after #, which never reaches Arai. It stops working after its uses, after 7 days, or when someone is removed from the project.</p>
+      {error && <Notice kind="error">{error}</Notice>}
+      <div className="form-actions">
+        <label className="visually-hidden" htmlFor="il-role">Role</label>
+        <select id="il-role" className="input input-sm" value={role} onChange={(e) => setRole(e.target.value as 'listener' | 'editor')}>
+          <option value="listener">Listener</option>
+          <option value="editor">Editor</option>
+        </select>
+        <label className="visually-hidden" htmlFor="il-uses">How many people</label>
+        <select id="il-uses" className="input input-sm" value={uses} onChange={(e) => setUses(Number(e.target.value))}>
+          {[1, 5, 25].map((n) => <option key={n} value={n}>{n === 1 ? 'One person' : `Up to ${n} people`}</option>)}
+        </select>
+        <button type="button" className="btn btn-primary btn-sm" onClick={() => void createInviteLink(p, role, uses, 7).then((u) => (setMade(u), load())).catch((e) => setError(errorMessage(e)))}>Create link</button>
+      </div>
+      {made && (
+        <div className="share-created">
+          <input className="input mono" readOnly value={made} onFocus={(e) => e.currentTarget.select()} aria-label="Invite link" />
+          <button type="button" className="btn btn-sm" onClick={() => void copy(made)}>{copied === made ? 'Copied' : 'Copy link'}</button>
+        </div>
+      )}
+      {links && links.length > 0 && (
+        <ul className="list">
+          {links.map((l) => (
+            <li key={l.id} className="share-row">
+              <div className="row-main">
+                <div className="row-title">{l.role === 'editor' ? 'Editor' : 'Listener'} · {l.uses} of {l.maxUses} used</div>
+                <p className="row-sub">Expires {new Date(l.expiresAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}</p>
+              </div>
+              {l.url && <button type="button" className="btn btn-sm" onClick={() => void copy(l.url!)}>{copied === l.url ? 'Copied' : 'Copy'}</button>}
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => void revokeInviteLink(p, l.id).then(load)}>Turn off</button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }

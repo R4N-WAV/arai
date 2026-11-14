@@ -83,14 +83,26 @@ async function openVault(vaultKey: Uint8Array, v: VaultBlobs): Promise<AccountKe
   }
 }
 
-export async function login(identifier: string, password: string, turnstileToken?: string): Promise<{ user: SessionUser; keys: AccountKeys; newDevice: boolean }> {
+// The Argon2id result of the last attempt, so a second-factor retry does not re-derive.
+let lastDerived: { key: string; pk: Awaited<ReturnType<typeof deriveInWorker>> } | null = null;
+
+export async function login(
+  identifier: string,
+  password: string,
+  turnstileToken?: string,
+  second?: { totpCode?: string; mfaRecoveryCode?: string },
+): Promise<{ user: SessionUser; keys: AccountKeys; newDevice: boolean }> {
   const pre = await api<{ salt: string; kdf: KdfParamsDto }>('POST', '/auth/prelogin', { identifier });
-  const pk = await deriveInWorker(password, await fromBase64Url(pre.salt), pre.kdf);
+  const cacheKey = `${identifier}\u0000${pre.salt}\u0000${password}`;
+  const pk = lastDerived?.key === cacheKey ? lastDerived.pk : await deriveInWorker(password, await fromBase64Url(pre.salt), pre.kdf);
+  lastDerived = { key: cacheKey, pk };
   const res = await api<{ user: SessionUser; vault: VaultBlobs; newDevice: boolean }>('POST', '/auth/login', {
     identifier,
     authKey: await b64(pk.authKey),
     turnstileToken,
+    ...second,
   });
+  lastDerived = null;
   return { user: res.user, keys: await openVault(pk.vaultKey, res.vault), newDevice: res.newDevice };
 }
 

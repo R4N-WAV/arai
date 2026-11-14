@@ -30,8 +30,12 @@ export const createFileRequest = z
     chunkCount: z.number().int().positive().max(300),
     encFileKey: b64(41, 200),
     keyVersion: z.number().int().positive(),
+    /** Where the ciphertext lives: Arai's storage, or the uploader's own Dropbox / Google Drive. */
+    storage: z.enum(['arai', 'dropbox', 'gdrive']).default('arai'),
+    remoteRef: z.string().max(400).optional(),
   })
-  .refine((v) => validChunkLayout(v.encSize, v.chunkCount), 'invalid_layout');
+  .refine((v) => validChunkLayout(v.encSize, v.chunkCount), 'invalid_layout')
+  .refine((v) => (v.storage === 'arai') === (v.remoteRef === undefined), 'remote_ref');
 
 const keyVersion = z.number().int().positive();
 const versionInput = z.object({ id: entityId, fileId: entityId, encMeta, keyVersion });
@@ -49,7 +53,7 @@ export interface TrackVersionDto {
   keyVersion: number;
   createdBy: string;
   createdAt: number;
-  file: { id: string; encSize: number; chunkCount: number; encFileKey: string; keyVersion: number };
+  file: { id: string; encSize: number; chunkCount: number; encFileKey: string; keyVersion: number; storage: 'arai' | 'dropbox' | 'gdrive'; remoteRef: string | null };
 }
 export interface TrackDto {
   id: string;
