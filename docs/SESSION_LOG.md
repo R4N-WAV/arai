@@ -111,4 +111,4 @@
 - Smaller: Sign out moved from the phone top bar to Settings; files dropped together keep their order as tracks (they used to land in upload-finish order); finished upload rows clear themselves; a new page starts at its top.
 - Tests: `app-shell-flow.mjs` (installed-app frame, hold-to-open menu, upload order, instant reopen); messages and profile-import flows updated.
 - Left as they are, on purpose (earlier owner decisions), but they read as unfinished: Settings shows "not available yet" rows for email verification, email codes and SMS codes; the email carries an "Unverified" badge with no way to verify.
-
+- Later the same day: track rows lost their drag handle. A row is picked up by resting a finger on it (~0.4 s; it shrinks slightly, then lifts with a shadow while the rest dim) or by dragging it with a mouse; a swipe still scrolls and letting go never plays the track. Keyboard: Alt + arrow up/down on the row, or Move up / Move down in the track menu. The message menu is now small and sits directly under (or above) the bubble on every screen size instead of a bottom sheet on phones. Both covered in `app-shell-flow` / `tracks-flow`.

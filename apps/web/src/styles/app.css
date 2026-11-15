@@ -400,16 +400,21 @@ a:hover { text-decoration-color: currentColor; }
 .zoom input { flex: 1; accent-color: var(--text); }
 
 /* ---------- track rows: playable, draggable, expandable ---------- */
-.track-row { grid-template-columns: 28px 44px minmax(0, 1fr) minmax(0, 260px) 48px auto; cursor: pointer; border-radius: var(--r-sm); padding: 0 var(--s-2); margin: 0 calc(-1 * var(--s-2)); transition: background 0.2s var(--ease); }
+.track-row { grid-template-columns: 44px minmax(0, 1fr) minmax(0, 260px) 48px auto; cursor: pointer; border-radius: var(--r-sm); padding: 0 var(--s-2); margin: 0 calc(-1 * var(--s-2)); transition: background 0.2s var(--ease); }
 .track-row:hover { background: rgb(255 255 255 / 0.035); }
 .track.active .track-row { background: rgb(255 255 255 / 0.05); }
 .track.active .track-title { color: #fff; }
-.track.dragging { position: relative; z-index: 2; }
-.track.dragging .track-row { background: rgb(30 29 35 / 0.95); box-shadow: 0 18px 40px -18px rgb(0 0 0 / 0.9); transform: scale(1.01); }
+/* Reordering: hold a row and it lifts off the list (as icons do on a phone's home screen), then follows the finger. */
+.track-row.movable { -webkit-touch-callout: none; transition: background 0.2s var(--ease), transform 0.18s var(--ease), box-shadow 0.18s var(--ease); }
+@media (pointer: coarse) { .track-row.movable { -webkit-user-select: none; user-select: none; } }
+.track.pressing .track-row { transform: scale(0.98); background: rgb(255 255 255 / 0.06); transition-duration: 0.38s; }
+.track.dragging { position: relative; z-index: 2; border-top-color: transparent; }
+.track.dragging + .track { border-top-color: transparent; }
+.track.dragging .track-row { background: rgb(38 37 45 / 0.98); box-shadow: 0 0 0 1px var(--line-strong), 0 22px 44px -14px rgb(0 0 0 / 0.95); transform: scale(1.035); opacity: 1; animation: lift 0.22s var(--ease); }
+.track.dragging .track-title { color: #fff; }
+.tracks:has(.dragging) .track:not(.dragging) { opacity: 0.55; transition: opacity 0.18s var(--ease); }
+@keyframes lift { 0% { transform: scale(0.98); } 60% { transform: scale(1.055); } 100% { transform: scale(1.035); } }
 body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select: none; }
-.drag-handle { width: 28px; height: 44px; border: 0; background: transparent; color: var(--faint); cursor: grab; display: grid; place-items: center; border-radius: var(--r-xs); touch-action: none; opacity: 0.5; }
-.track-row:hover .drag-handle, .drag-handle:focus-visible { opacity: 1; color: var(--muted); }
-.drag-handle svg { width: 16px; height: 16px; }
 .track-play .track-play-icon { display: none; width: 16px; height: 16px; }
 .track-row:hover .track-play:not(:disabled) .track-num { display: none; }
 .track-row:hover .track-play:not(:disabled) .track-play-icon { display: block; }
@@ -424,7 +429,7 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .stat dt { font-size: var(--fs-xs); color: var(--faint); margin-bottom: 2px; }
 .stat dd { margin: 0; font-size: var(--fs-sm); color: var(--text-2); }
 @media (max-width: 720px) {
-  .track-row { grid-template-columns: 28px 40px minmax(0, 1fr) 44px auto; }
+  .track-row { grid-template-columns: 40px minmax(0, 1fr) 44px auto; }
   .versions { padding-left: 0; }
 }
 
@@ -437,7 +442,7 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .project-owner { margin: 0 0 var(--s-3); }
 .project-actions { margin-top: var(--s-5); }
 .project-actions .btn-primary svg { margin-left: -4px; }
-.track-row { grid-template-columns: 24px 40px minmax(0, 1fr) auto 52px 40px; min-height: 52px; gap: var(--s-3); }
+.track-row { grid-template-columns: 40px minmax(0, 1fr) auto 52px 40px; min-height: 52px; gap: var(--s-3); }
 .track-main .row-sub { display: none; }
 .track.active .track-main .row-sub, .track-row:hover .track-main .row-sub { display: block; }
 .version-badge { display: inline-flex; align-items: center; gap: 5px; min-height: 30px; padding: 0 var(--s-2); border-radius: var(--r-pill); border: 1px solid transparent; background: transparent; color: var(--muted); font: 500 var(--fs-xs) var(--font-mono); cursor: pointer; }
@@ -448,7 +453,7 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .waveform-detail { height: 64px; margin: var(--s-3) 0 var(--s-2); }
 .versions { padding-left: calc(64px + var(--s-3)); }
 @media (max-width: 720px) {
-  .track-row { grid-template-columns: 24px 36px minmax(0, 1fr) auto 40px; }
+  .track-row { grid-template-columns: 36px minmax(0, 1fr) auto 40px; }
   .track-row .track-time { display: none; }
   .project-hero .cover-hero { width: 132px; }
   .versions { padding-left: 0; }
@@ -499,12 +504,11 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
   .project-actions .btn-primary { padding: 0 var(--s-6); }
 
   /* Calm track rows: handle, number/play, title, length, menu. */
-  .track-row { grid-template-columns: 22px 34px minmax(0, 1fr) 40px 36px; gap: var(--s-2); min-height: 56px; padding: 0 var(--s-1); margin: 0; }
+  .track-row { grid-template-columns: 34px minmax(0, 1fr) 40px 36px; gap: var(--s-2); min-height: 56px; padding: 0 var(--s-1); margin: 0; }
   .track-row .track-time { display: block; font-size: var(--fs-xs); }
   .track-row .version-badge { display: none; }
   .track-main .row-sub, .track.active .track-main .row-sub, .track-row:hover .track-main .row-sub { display: none; }
   .track-title { font-size: 0.9375rem; }
-  .drag-handle { width: 22px; opacity: 0.4; }
   .track-play { width: 34px; height: 34px; }
   .insights { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .version-head .btn { flex: 0 0 auto; }
@@ -799,16 +803,18 @@ kbd { display: inline-block; min-width: 1.8em; padding: 1px 6px; margin-right: 4
 /* ---------- context menu (right click / press and hold) ---------- */
 .ctx { position: fixed; inset: 0; z-index: 60; }
 .ctx-backdrop { position: absolute; inset: 0; }
-.ctx-menu { position: fixed; left: var(--x); top: var(--y); right: auto; min-width: 220px; animation: pop 0.12s var(--ease) both; }
+/* Compact, and placed against the thing it belongs to (never a full-width sheet). */
+.ctx-menu { position: fixed; left: var(--x); top: var(--y); right: auto; bottom: auto; min-width: 168px; max-width: 240px; padding: 4px; border-radius: 12px; transform-origin: var(--ox, left) top; animation: ctx-in 0.12s var(--ease) both; }
 .ctx-menu.unarmed { pointer-events: none; }
-.ctx-reactions { display: flex; gap: 2px; padding: 2px 2px var(--s-1); margin-bottom: var(--s-1); border-bottom: 1px solid var(--line); }
-.menu-list .ctx-reaction { display: grid; place-items: center; flex: 1; min-width: 36px; min-height: 40px; padding: 0; border-radius: 10px; color: var(--text-2); }
-.menu-list .ctx-reaction svg { width: 20px; height: 20px; }
+.ctx-menu button[role="menuitem"] { min-height: 34px; padding: 0 10px; font-size: var(--fs-sm); border-radius: 8px; }
+.ctx-reactions { display: flex; gap: 0; padding: 0 0 4px; margin-bottom: 4px; border-bottom: 1px solid var(--line); }
+.menu-list .ctx-reaction { display: grid; place-items: center; flex: 1; min-width: 30px; min-height: 32px; padding: 0; border-radius: 8px; color: var(--text-2); }
+.menu-list .ctx-reaction svg { width: 17px; height: 17px; }
 .menu-list .ctx-reaction[aria-pressed="true"] { background: var(--text); color: var(--void); }
-@media (max-width: 720px) {
-  .ctx-backdrop { background: rgb(4 4 6 / 0.5); animation: fade 0.12s linear both; }
-  .ctx-menu { left: var(--s-3); right: var(--s-3); top: auto; bottom: calc(env(safe-area-inset-bottom) + var(--s-3)); min-width: 0; animation: sheet-in 0.16s var(--ease) both; }
-  .menu-list .ctx-reaction { min-height: 48px; }
+@keyframes ctx-in { from { opacity: 0; transform: scale(0.92); } to { opacity: 1; transform: none; } }
+@media (pointer: coarse) {
+  .ctx-menu button[role="menuitem"] { min-height: 40px; }
+  .menu-list .ctx-reaction { min-height: 38px; }
 }
 
 /* ---------- installed app on a phone: an app frame, not a web page ---------- */

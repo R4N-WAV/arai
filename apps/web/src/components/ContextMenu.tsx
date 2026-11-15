@@ -7,7 +7,14 @@ export interface MenuPoint {
   y: number;
   /** Opened by a long press: the finger is still down, so the menu waits for it to lift. */
   touch: boolean;
+  /** The thing the menu belongs to (marked `data-menu-anchor`): the menu sits right beside it. */
+  anchor?: { left: number; right: number; top: number; bottom: number };
 }
+
+const anchorOf = (el: HTMLElement) => {
+  const r = (el.querySelector<HTMLElement>('[data-menu-anchor]') ?? el).getBoundingClientRect();
+  return { left: r.left, right: r.right, top: r.top, bottom: r.bottom };
+};
 
 const HOLD_MS = 420;
 const SLOP = 10;
@@ -28,17 +35,18 @@ export function useContextTrigger<T>(open: (target: T, at: MenuPoint) => void) {
       // Links, players and fields keep the browser's own menu.
       if ((e.target as HTMLElement).closest('a, audio, video, input, textarea')) return;
       e.preventDefault();
-      if (!fired.current) open(target, { x: e.clientX, y: e.clientY, touch: false });
+      if (!fired.current) open(target, { x: e.clientX, y: e.clientY, touch: false, anchor: anchorOf(e.currentTarget) });
     },
     onPointerDown: (e: PointerEvent<HTMLElement>) => {
       fired.current = false;
       if (e.pointerType === 'mouse') return;
       start.current = { x: e.clientX, y: e.clientY };
+      const el = e.currentTarget;
       cancel();
       timer.current = setTimeout(() => {
         fired.current = true;
         navigator.vibrate?.(8);
-        open(target, { ...start.current, touch: true });
+        open(target, { ...start.current, touch: true, anchor: anchorOf(el) });
       }, HOLD_MS);
     },
     onPointerMove: (e: PointerEvent<HTMLElement>) => {
@@ -60,14 +68,18 @@ export function useContextTrigger<T>(open: (target: T, at: MenuPoint) => void) {
       if (e.key === 'ContextMenu' || (e.key === 'F10' && e.shiftKey) || e.key === 'Enter') {
         e.preventDefault();
         const r = e.currentTarget.getBoundingClientRect();
-        open(target, { x: r.left + Math.min(r.width / 2, 160), y: r.top + Math.min(r.height, 40), touch: false });
+        open(target, { x: r.left + Math.min(r.width / 2, 160), y: r.top + Math.min(r.height, 40), touch: false, anchor: anchorOf(e.currentTarget) });
       }
     },
   });
 }
 
-/** A menu at a point on screen (a bottom sheet on phones). Esc, a click outside or choosing something closes it. */
-export function ContextMenu({ at, label, items, header, onClose }: { at: MenuPoint; label: string; items: MenuItem[]; header?: ReactNode; onClose: () => void }) {
+/**
+ * A small menu placed against its anchor: just under it (above when there is
+ * no room), lined up with the `align` side. Without an anchor it opens at the
+ * pointer. Esc, a click outside or choosing something closes it.
+ */
+export function ContextMenu({ at, label, items, header, onClose, align = 'start' }: { at: MenuPoint; label: string; items: MenuItem[]; header?: ReactNode; onClose: () => void; align?: 'start' | 'end' }) {
   const list = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState({ x: at.x, y: at.y });
   const [armed, setArmed] = useState(!at.touch);
@@ -77,9 +89,19 @@ export function ContextMenu({ at, label, items, header, onClose }: { at: MenuPoi
   useLayoutEffect(() => {
     const el = list.current;
     if (!el) return;
-    const r = el.getBoundingClientRect();
-    setPos({ x: Math.max(8, Math.min(at.x, window.innerWidth - r.width - 8)), y: Math.max(8, Math.min(at.y, window.innerHeight - r.height - 8)) });
-  }, [at.x, at.y]);
+    // Measure the laid-out size (the opening animation scales the box).
+    const w = el.offsetWidth;
+    const h = el.offsetHeight;
+    const a = at.anchor;
+    let x = at.x;
+    let y = at.y;
+    if (a) {
+      x = align === 'end' ? a.right - w : a.left;
+      y = a.bottom + 6;
+      if (y + h > window.innerHeight - 8 && a.top - h - 6 >= 8) y = a.top - h - 6;
+    }
+    setPos({ x: Math.max(8, Math.min(x, window.innerWidth - w - 8)), y: Math.max(8, Math.min(y, window.innerHeight - h - 8)) });
+  }, [at, align]);
 
   useEffect(() => {
     if (armed) {
@@ -115,7 +137,7 @@ export function ContextMenu({ at, label, items, header, onClose }: { at: MenuPoi
   return createPortal(
     <div className="ctx" onKeyDown={onKey}>
       <div className="ctx-backdrop" onPointerDown={() => armed && close()} onContextMenu={(e) => (e.preventDefault(), close())} />
-      <div ref={list} className={`menu-list ctx-menu${armed ? '' : ' unarmed'}`} role="menu" aria-label={label} style={{ '--x': `${pos.x}px`, '--y': `${pos.y}px` } as React.CSSProperties}>
+      <div ref={list} className={`menu-list ctx-menu${armed ? '' : ' unarmed'}`} role="menu" aria-label={label} style={{ '--x': `${pos.x}px`, '--y': `${pos.y}px`, '--ox': align === 'end' ? 'right' : 'left' } as React.CSSProperties}>
         {header}
         {items.map((it) => (
           <button key={it.label} type="button" role="menuitem" className={it.danger ? 'danger' : undefined} onClick={() => (close(), it.onSelect())}>

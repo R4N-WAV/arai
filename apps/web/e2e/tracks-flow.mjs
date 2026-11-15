@@ -132,11 +132,12 @@ await first.getByRole('button', { name: /Make current/ }).click();
 await first.locator('.version-badge', { hasText: 'v1' }).waitFor();
 step('restored version 1 as current; version 2 kept in history');
 
-// reorder: keyboard on the handle, then drag with the mouse; order survives reload
+// reorder: keyboard (Alt + arrow on the row), then drag the row itself with the mouse; order survives reload
+if ((await page.locator('.drag-handle').count()) > 0) throw new Error('track rows should not carry a drag handle');
 const order = async () => (await page.locator('.track-title').allTextContents()).join(' | ');
 const before = await order();
-await page.locator('.track', { hasText: 'Undertow' }).locator('.drag-handle').focus();
-await page.keyboard.press(Number(before.indexOf('Undertow') > 0) ? 'ArrowUp' : 'ArrowDown');
+await page.locator('.track', { hasText: 'Undertow' }).locator('.track-play').focus();
+await page.keyboard.press(Number(before.indexOf('Undertow') > 0) ? 'Alt+ArrowUp' : 'Alt+ArrowDown');
 await page.waitForFunction((b) => [...document.querySelectorAll('.track-title')].map((e) => e.textContent).join(' | ') !== b, before, { timeout: 5000 });
 const afterKey = await order();
 await page.waitForTimeout(400);
@@ -144,7 +145,7 @@ await page.reload();
 await page.locator('.track-title').first().waitFor();
 if ((await order()) !== afterKey) throw new Error('keyboard reorder did not persist');
 await page.waitForTimeout(800); // let the rows finish their entrance animation
-const h1 = page.locator('.track').nth(0).locator('.drag-handle');
+const h1 = page.locator('.track').nth(0).locator('.track-main');
 const row2 = await page.locator('.track').nth(1).boundingBox();
 const hb = await h1.boundingBox();
 await page.mouse.move(hb.x + hb.width / 2, hb.y + hb.height / 2);

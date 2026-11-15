@@ -66,8 +66,11 @@ function TrackRow(props: {
   onMakeCurrent: (v: TrackVersion) => void;
   onNewVersion: () => void;
   onDelete: () => void;
-  onDragStart: (e: PointerEvent<HTMLButtonElement>) => void;
-  onMoveKey: (dir: -1 | 1) => void;
+  /** Press and hold (touch) or press and move (mouse) on the row picks it up for reordering. */
+  onPressStart: (e: PointerEvent<HTMLDivElement>) => void;
+  onMove: (dir: -1 | 1) => void;
+  pressing: boolean;
+  count: number;
   plays?: { total: number; last30: number; viaLinks: number };
   onChanged: (t: Track) => void;
 }) {
@@ -105,22 +108,18 @@ function TrackRow(props: {
     if ((e.target as HTMLElement).closest('button, a, input, .versions')) return;
     active ? player.toggle() : props.onPlay();
   };
-  const onHandleKey = (e: KeyboardEvent<HTMLButtonElement>) => {
-    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+  // Keyboard reordering: Alt + arrow up/down anywhere on the row (also in the track's menu).
+  const onRowKey = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (canEdit && e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
       e.preventDefault();
       e.stopPropagation();
-      props.onMoveKey(e.key === 'ArrowUp' ? -1 : 1);
+      props.onMove(e.key === 'ArrowUp' ? -1 : 1);
     }
   };
 
   return (
-    <li className={`track${active ? ' active' : ''}${props.dragging ? ' dragging' : ''}`} data-flip-id={t.id} data-dragging={props.dragging}>
-      <div className="track-row" onClick={onRowClick}>
-        {canEdit && (
-          <button type="button" className="drag-handle" aria-label={`Reorder ${t.title}. Use arrow up and down to move.`} onPointerDown={props.onDragStart} onKeyDown={onHandleKey}>
-            <svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><circle cx="9" cy="6" r="1.5" /><circle cx="15" cy="6" r="1.5" /><circle cx="9" cy="12" r="1.5" /><circle cx="15" cy="12" r="1.5" /><circle cx="9" cy="18" r="1.5" /><circle cx="15" cy="18" r="1.5" /></svg>
-          </button>
-        )}
+    <li className={`track${active ? ' active' : ''}${props.dragging ? ' dragging' : ''}${props.pressing ? ' pressing' : ''}`} data-flip-id={t.id} data-dragging={props.dragging}>
+      <div className={canEdit ? 'track-row movable' : 'track-row'} onClick={onRowClick} onPointerDown={canEdit ? props.onPressStart : undefined} onKeyDown={onRowKey} onContextMenu={(e) => canEdit && (e.nativeEvent as globalThis.PointerEvent).pointerType === 'touch' && e.preventDefault()}>
         <button type="button" className="track-play" aria-label={playing ? `Pause ${t.title}` : `Play ${t.title}`} onClick={() => (active ? player.toggle() : props.onPlay())} disabled={!t.current}>
           {loading ? <span className="spinner" aria-hidden="true" /> : playing ? (
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h4v14H7zM13 5h4v14h-4z" fill="currentColor" /></svg>
@@ -149,6 +148,8 @@ function TrackRow(props: {
           items={[
             { label: open ? 'Hide versions' : 'Versions and insights', onSelect: props.onToggle },
             ...(canEdit ? [{ label: 'Upload new version', onSelect: props.onNewVersion }] : []),
+            ...(canEdit && index > 0 ? [{ label: 'Move up', onSelect: () => props.onMove(-1) }] : []),
+            ...(canEdit && index < props.count - 1 ? [{ label: 'Move down', onSelect: () => props.onMove(1) }] : []),
             ...(canEdit ? [{ label: 'Rename…', onSelect: () => (setRenaming(t.title), setRenameError(null)) }] : []),
             ...(canEdit && t.current?.meta?.duration ? [{ label: 'Trim…', onSelect: () => setTrimming(t.current) }] : []),
             ...(t.versions.length > 1 ? [{ label: 'Compare versions…', onSelect: () => setComparing(true) }] : []),
@@ -385,7 +386,7 @@ export function TracksSection({ project, addOpen, setAddOpen, onTracks }: { proj
     setTracks(list);
     setAnnounce(`${list[j]!.title} moved to position ${j + 1} of ${list.length}`);
     void persistOrder(list, id);
-    requestAnimationFrame(() => document.querySelector<HTMLButtonElement>(`[data-flip-id="${id}"] .drag-handle`)?.focus());
+    requestAnimationFrame(() => document.querySelector<HTMLButtonElement>(`[data-flip-id="${id}"] .track-play`)?.focus());
   };
 
   // Re-place the dragged row synchronously after each reorder render (no one-frame jump).
@@ -400,16 +401,68 @@ export function TracksSection({ project, addOpen, setAddOpen, onTracks }: { proj
    * layout, not animated boxes); neighbours glide (FLIP); the page scrolls
    * near the edges; on release the row settles into its slot.
    */
-  const startDrag = (id: string) => (e: PointerEvent<HTMLButtonElement>) => {
-    if (!tracks || e.button !== 0) return;
-    e.preventDefault();
-    const ol = listRef.current!;
+  const [pressingId, setPressingId] = useState<string | null>(null);
+  const justDragged = useRef(false);
+  // Once a row is picked up on a touch screen, the finger moves the row, not the page.
+  useEffect(() => {
+    const hold = (e: TouchEvent) => {
+      if (dragging.current) e.preventDefault();
+    };
+    document.addEventListener('touchmove', hold, { passive: false });
+    return () => document.removeEventListener('touchmove', hold);
+  }, []);
+
+  /**
+   * Picking a row up. A finger has to rest on it for a moment (so scrolling
+   * and tapping to play keep working); a mouse picks it up as soon as it
+   * drags. Buttons and the open versions panel are left alone.
+   */
+  const pressStart = (id: string) => (e: PointerEvent<HTMLDivElement>) => {
+    if (!tracks || tracks.length < 2 || e.button !== 0 || dragging.current) return;
+    if ((e.target as HTMLElement).closest('button, a, input, select, textarea, .versions, .menu')) return;
     const el = e.currentTarget.closest('li') as HTMLLIElement;
-    const grab = e.clientY - el.getBoundingClientRect().top;
+    const touch = e.pointerType !== 'mouse';
+    const sx = e.clientX;
+    const sy = e.clientY;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const stop = () => {
+      clearTimeout(timer);
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', stop);
+      window.removeEventListener('pointercancel', stop);
+      setPressingId(null);
+    };
+    const lift = (y: number) => {
+      stop();
+      if (touch) navigator.vibrate?.(10);
+      window.getSelection()?.removeAllRanges();
+      beginDrag(id, el, sy, y);
+    };
+    const onMove = (ev: globalThis.PointerEvent) => {
+      const moved = Math.hypot(ev.clientX - sx, ev.clientY - sy);
+      if (touch) {
+        if (moved > 10) stop(); // that was a scroll
+      } else if (moved > 6) lift(ev.clientY);
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', stop);
+    window.addEventListener('pointercancel', stop);
+    if (touch) {
+      setPressingId(id);
+      timer = setTimeout(() => lift(sy), 380);
+    }
+  };
+
+  const beginDrag = (id: string, el: HTMLLIElement, grabY: number, startY: number) => {
+    if (!tracks) return;
+    const ol = listRef.current!;
+    const grab = grabY - el.getBoundingClientRect().top;
     let list = [...tracks];
-    let pointerY = e.clientY;
+    let pointerY = startY;
     let raf = 0;
     el.style.transition = 'none';
+    dragging.current = true;
+    justDragged.current = true;
     setDraggingId(id);
     document.body.classList.add('is-dragging');
 
@@ -461,6 +514,8 @@ export function TracksSection({ project, addOpen, setAddOpen, onTracks }: { proj
         el.style.transition = '';
         el.style.transform = '';
         setDraggingId(null);
+        // The release must not also play the track.
+        setTimeout(() => (justDragged.current = false), 50);
       };
       el.addEventListener('transitionend', done, { once: true });
       setTimeout(done, 300);
@@ -528,7 +583,16 @@ export function TracksSection({ project, addOpen, setAddOpen, onTracks }: { proj
       ) : empty ? (
         !canEdit && <p className="voice" style={{ fontSize: 'var(--fs-lg)' }}>No tracks yet.</p>
       ) : (
-        <ol className="tracks" ref={listRef}>
+        <ol
+          className="tracks"
+          ref={listRef}
+          onClickCapture={(e) => {
+            if (justDragged.current) {
+              e.preventDefault();
+              e.stopPropagation();
+            }
+          }}
+        >
           {tracks.map((t, i) => (
             <TrackRow
               key={t.id}
@@ -564,8 +628,10 @@ export function TracksSection({ project, addOpen, setAddOpen, onTracks }: { proj
                   setError(errorMessage(e));
                 }
               }}
-              onDragStart={startDrag(t.id)}
-              onMoveKey={(dir) => move(t.id, dir)}
+              onPressStart={pressStart(t.id)}
+              onMove={(dir) => move(t.id, dir)}
+              pressing={pressingId === t.id}
+              count={tracks.length}
             />
           ))}
         </ol>

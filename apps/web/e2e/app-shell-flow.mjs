@@ -90,6 +90,47 @@ if (!last || !lastNow || lastNow.y + lastNow.height > tabsTop) throw new Error('
 await shot('app1-project');
 step('only the content pane scrolls; top bar and tab bar never move; the list ends clear of the tab bar');
 
+// Reordering: rest a finger on a track until it lifts, then move it. A swipe still scrolls, and nothing plays.
+await page.evaluate(() => document.querySelector('.content').scrollTo(0, 1e6));
+await page.waitForTimeout(200);
+const touch = (type, pt) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: pt ? [pt] : [] });
+const rowOf = async (name) => page.locator('.track', { hasText: name }).locator('.track-main').boundingBox();
+const from = await rowOf('02 Short');
+const to = await rowOf('04 Closer');
+const start = { x: Math.round(from.x + from.width / 2), y: Math.round(from.y + from.height / 2) };
+// A quick swipe is a scroll, not a pick-up.
+await touch('touchStart', start);
+await touch('touchMove', { x: start.x, y: start.y - 40 });
+await touch('touchEnd');
+await page.waitForTimeout(500);
+if ((await page.locator('.track.dragging').count()) > 0) throw new Error('a swipe picked a track up');
+await page.evaluate(() => document.querySelector('.content').scrollTo(0, 1e6));
+await page.waitForTimeout(200);
+const from2 = await rowOf('02 Short');
+const s2 = { x: Math.round(from2.x + from2.width / 2), y: Math.round(from2.y + from2.height / 2) };
+const to2 = await rowOf('04 Closer');
+await touch('touchStart', s2);
+await page.locator('.track.pressing', { hasText: '02 Short' }).waitFor({ timeout: 1000 });
+await page.locator('.track.dragging', { hasText: '02 Short' }).waitFor({ timeout: 2000 });
+await page.waitForTimeout(350); // let the lift settle
+const lifted = await page.locator('.track.dragging .track-row').evaluate((el) => ({ shadow: getComputedStyle(el).boxShadow !== 'none', scale: new DOMMatrix(getComputedStyle(el).transform).a }));
+if (!lifted.shadow || lifted.scale <= 1) throw new Error(`the held track is not highlighted: ${JSON.stringify(lifted)}`);
+await shot('app0-lifted');
+const endY = Math.round(to2.y + to2.height * 0.9);
+for (let i = 1; i <= 10; i++) {
+  await touch('touchMove', { x: s2.x, y: Math.round(s2.y + ((endY - s2.y) * i) / 10) });
+  await page.waitForTimeout(30);
+}
+await touch('touchEnd');
+await page.waitForFunction(() => document.querySelectorAll('.track.dragging').length === 0, null, { timeout: 3000 });
+const moved = await page.locator('.track-title').allTextContents();
+if (moved.join('|') !== ['01 Long Opening', '03 Middle', '04 Closer', '02 Short', '05 Coda', '06 Reprise'].join('|')) throw new Error(`hold-and-move gave ${moved.join(', ')}`);
+await page.waitForTimeout(400);
+if ((await page.locator('.player').count()) > 0) throw new Error('letting go of a moved track started playback');
+if ((await page.locator('.drag-handle').count()) > 0) throw new Error('drag handles are still there');
+void to;
+step('hold a track until it lifts, move it, let go: order changed, nothing played, a swipe still scrolls');
+
 if ((await page.locator('.mobile-bar').getByText('Sign out').count()) > 0) throw new Error('Sign out should not sit in the top bar');
 await page.locator('.tabbar').getByRole('link', { name: 'Library' }).click();
 await page.getByRole('heading', { name: 'Library' }).waitFor();
@@ -123,7 +164,11 @@ if ((await page.getByRole('menu').count()) > 0) throw new Error('a tap opened th
 // Holding opens it; the finger lifting does not choose anything.
 await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [at] });
 await page.getByRole('menu').waitFor({ timeout: 2000 });
+await page.waitForTimeout(250);
 await shot('app2-message-menu');
+// Small, and right under the message it belongs to (not a sheet across the screen).
+const menuBox = await page.getByRole('menu').boundingBox();
+if (menuBox.width > 250 || Math.abs(menuBox.y - (box.y + box.height)) > 14 || Math.abs(menuBox.x + menuBox.width - (box.x + box.width)) > 14) throw new Error(`menu is not beside the message: ${JSON.stringify({ menuBox, box })}`);
 await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
 await page.waitForTimeout(300);
 await page.getByRole('menu').getByRole('button', { name: 'Fire' }).tap();

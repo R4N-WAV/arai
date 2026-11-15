@@ -418,7 +418,7 @@ function Thread({ c, onChanged }: { c: Conversation; onChanged: () => void }) {
                   </header>
                 )}
                 {parent && <p className="msg-quote">↳ {nameOf(parent.senderId)}: {parent.body?.text.slice(0, 80) || '…'}</p>}
-                <div className="msg-body">
+                <div className="msg-body" data-menu-anchor>
                   {m.deleted ? <span className="muted">Message deleted.</span> : m.body ? (
                     <>
                       {m.body.text && <p className="msg-text">{m.body.text}{m.editedAt && <span className="row-sub"> · edited</span>}</p>}
@@ -473,6 +473,7 @@ function Thread({ c, onChanged }: { c: Conversation; onChanged: () => void }) {
           at={menu.at}
           label={`Message from ${nameOf(menu.m.senderId)}, ${time(menu.m.createdAt)}`}
           items={menuItems(menu.m)}
+          align={menu.m.senderId === user?.id ? 'end' : 'start'}
           onClose={() => setMenu(null)}
           header={
             <div className="ctx-reactions" role="group" aria-label="React">
