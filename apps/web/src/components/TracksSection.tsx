@@ -5,7 +5,7 @@ import { useFlip } from '../lib/flip';
 import { usePlayer } from '../lib/player';
 import type { Project } from '../lib/projects';
 import { downloadOriginal, renameTrack } from '../lib/tracks';
-import { decodeWave, deleteTrack, loadTracks, makeCurrent, UPLOAD_ERRORS, UploadJob, type Track, type TrackVersion, type WaveData } from '../lib/tracks';
+import { cachedTracks, decodeWave, deleteTrack, loadTracks, makeCurrent, UPLOAD_ERRORS, UploadJob, type Track, type TrackVersion, type WaveData } from '../lib/tracks';
 import { Menu } from './Menu';
 import { Modal } from './Modal';
 import { Notice } from './Unavailable';
@@ -256,7 +256,7 @@ function TrackRow(props: {
 
 export function TracksSection({ project, addOpen, setAddOpen, onTracks }: { project: Project; addOpen: boolean; setAddOpen: (v: boolean) => void; onTracks: (t: Track[]) => void }) {
   const player = usePlayer();
-  const [tracks, setTracks] = useState<Track[] | null>(null);
+  const [tracks, setTracks] = useState<Track[] | null>(() => cachedTracks(project.id));
   const [plays, setPlays] = useState<Record<string, { total: number; last30: number; viaLinks: number }>>({});
   const [jobs, setJobs] = useState<UploadJob[]>([]);
   const [, force] = useState(0);
@@ -334,11 +334,19 @@ export function TracksSection({ project, addOpen, setAddOpen, onTracks }: { proj
 
   const startJob = (job: UploadJob) => {
     setJobs((j) => [...j, job]);
-    void job.start().then((t) => t && refresh());
+    const done = job.start();
+    void done.then((t) => {
+      if (!t) return;
+      void refresh();
+      // A finished upload is already in the list below: its row does not need dismissing by hand.
+      setTimeout(() => setJobs((x) => x.filter((y) => y !== job)), 2500);
+    });
+    return done;
   };
   const addFiles = (files: FileList | File[] | null) => {
     if (!files) return;
-    for (const f of Array.from(files)) startJob(new UploadJob(project, f, () => force((n) => n + 1)));
+    let previous: Promise<unknown> | null = null;
+    for (const f of Array.from(files)) previous = startJob(new UploadJob(project, f, () => force((n) => n + 1), null, '', null, previous));
   };
   const onDrop = (e: DragEvent) => {
     e.preventDefault();
@@ -426,8 +434,11 @@ export function TracksSection({ project, addOpen, setAddOpen, onTracks }: { proj
 
     const loop = () => {
       const edge = 72;
-      if (pointerY < edge) window.scrollBy(0, -Math.ceil((edge - pointerY) / 6));
-      else if (pointerY > window.innerHeight - edge) window.scrollBy(0, Math.ceil((pointerY - (window.innerHeight - edge)) / 6));
+      // In the installed app the content pane scrolls, not the page.
+      const pane = ol.closest('.content');
+      const scroller = pane && getComputedStyle(pane).overflowY === 'auto' ? pane : window;
+      if (pointerY < edge) scroller.scrollBy(0, -Math.ceil((edge - pointerY) / 6));
+      else if (pointerY > window.innerHeight - edge) scroller.scrollBy(0, Math.ceil((pointerY - (window.innerHeight - edge)) / 6));
       place();
       raf = requestAnimationFrame(loop);
     };

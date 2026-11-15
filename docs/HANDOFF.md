@@ -9,6 +9,7 @@
 - Phases 0–14 built (phases 9–14 were defined from the backlog; see PROJECT_STATUS). Live: https://arai.ranuj-s.workers.dev, deploys automatically on push.
 - Provider-gated and greyed out: email (verification, email change, email invites), SMS 2FA, GIFs, and Dropbox/Google Drive storage until the apps are registered (docs/RUNBOOK.md "Optional providers").
 - Session 15 was a defect pass on sharing (see SESSION_LOG). Rule that came out of it: **an E2E test must not `reload()` to see another person's change**; that is how the missing live updates went unnoticed. Anything a second person does must reach an open tab through `announceProject` (server) and `useProjectEvents`/`useResume` (client).
+- The installed phone app uses a fixed frame (`html.standalone` in `app.css`); it has only been tested in an emulated browser, so check it on a real iPhone after any layout change. Tests emulate it with `navigator.standalone = true`.
 - The deploy workflow only deploys `main` and `claude/optimistic-dirac-f6m66e`; work on any other branch is not live until merged there.
 - Before every push: `npm run typecheck && npm run lint && npm test` (the deploy job runs the same and refuses to deploy on failure).
 
@@ -23,7 +24,7 @@
 2. When a domain + email provider exist: email verification, email change, invite by email, login alerts.
 3. Nice-to-have: sample-accurate gapless (Web Audio buffers for short tracks), higher-quality pitch shifting (phase vocoder), translations (Tamil/English).
 
-Local E2E: 19 scripts in `apps/web/e2e/`. Build the web app, apply local migrations (`npx wrangler d1 migrations apply arai --local` in `apps/api`), run `wrangler dev` in the background (restart it after each build; it can serve stale assets), clear counters before each run (`npx wrangler d1 execute arai --local --command "DELETE FROM rate_limits"`), then `NODE_PATH=$(npm root -g) node apps/web/e2e/<flow>.mjs`. Push tests need `VAPID_PRIVATE_JWK`, the cloud-storage test `DROPBOX_APP_KEY=e2e-test-app` and `DROPBOX_DL_ORIGIN=http://127.0.0.1:8790` in `apps/api/.dev.vars` (never committed). Track order after concurrent uploads is nondeterministic: tests must not assume it.
+Local E2E: 20 scripts in `apps/web/e2e/`. Build the web app, apply local migrations (`npx wrangler d1 migrations apply arai --local` in `apps/api`), run `wrangler dev` in the background (restart it after each build; it can serve stale assets), clear counters before each run (`npx wrangler d1 execute arai --local --command "DELETE FROM rate_limits"`), then `NODE_PATH=$(npm root -g) node apps/web/e2e/<flow>.mjs`. Push tests need `VAPID_PRIVATE_JWK`, the cloud-storage test `DROPBOX_APP_KEY=e2e-test-app` and `DROPBOX_DL_ORIGIN=http://127.0.0.1:8790` in `apps/api/.dev.vars` (never committed). Track order after concurrent uploads is nondeterministic: tests must not assume it.
 
 ## Owner actions still required (not blocking local development)
 Deployment setup (README "Deployment": D1 database id, API token, account id into GitHub). Later: R2 enablement (Phase 2), Turnstile keys, domain + email provider, SMS provider. See `docs/REMAINING_TO_V1.md §2`.

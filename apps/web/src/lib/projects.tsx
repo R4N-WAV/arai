@@ -62,11 +62,13 @@ function cleanMeta(m: unknown): ProjectMeta | null {
   if (!m || typeof m !== 'object') return null;
   const o = m as Record<string, unknown>;
   if (typeof o.name !== 'string' || typeof o.color !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(o.color)) return null;
+  // Bulk uploads used to stamp projects with an "Imported" description and tag. Nobody chose those: drop them.
+  const description = typeof o.description === 'string' && o.description !== 'Imported' ? o.description.slice(0, 2000) : '';
   return {
     name: o.name.slice(0, 120),
-    description: typeof o.description === 'string' ? o.description.slice(0, 2000) : '',
+    description,
     genre: typeof o.genre === 'string' ? o.genre.slice(0, 60) : '',
-    tags: Array.isArray(o.tags) ? o.tags.filter((t): t is string => typeof t === 'string').slice(0, 10) : [],
+    tags: Array.isArray(o.tags) ? o.tags.filter((t): t is string => typeof t === 'string' && t !== 'imported').slice(0, 10) : [],
     color: o.color,
   };
 }

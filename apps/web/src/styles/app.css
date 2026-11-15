@@ -343,27 +343,19 @@ a:hover { text-decoration-color: currentColor; }
 .import-failed { margin: var(--s-2) 0 0; padding-left: 1.1rem; font-size: var(--fs-sm); color: #ffd5ce; }
 
 /* ---------- motion: entering places, not just showing things ---------- */
-@keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+@keyframes rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes pop { from { opacity: 0; transform: translateY(18px) scale(0.97); } to { opacity: 1; transform: none; } }
 @keyframes sink { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(12px) scale(0.98); } }
 @keyframes slide-up { from { transform: translateY(120%); } to { transform: none; } }
 
-/* Page content enters with a short rise; lists cascade in. */
-.content > * { animation: rise 0.5s var(--ease) both; }
-.content > *:nth-child(2) { animation-delay: 40ms; }
-.content > *:nth-child(3) { animation-delay: 80ms; }
-.content > *:nth-child(n + 4) { animation-delay: 120ms; }
-.sleeves > li, .tracks > li, .list > li, .uploads > li { animation: rise 0.45s var(--ease) both; }
-.sleeves > li:nth-child(2), .tracks > li:nth-child(2) { animation-delay: 40ms; }
-.sleeves > li:nth-child(3), .tracks > li:nth-child(3) { animation-delay: 80ms; }
-.sleeves > li:nth-child(4), .tracks > li:nth-child(4) { animation-delay: 120ms; }
-.sleeves > li:nth-child(n + 5), .tracks > li:nth-child(n + 5) { animation-delay: 160ms; }
+/* Page content settles in quickly, all at once: staggered half-second entrances made every tap feel like a wait. */
+.content > * { animation: rise 0.16s var(--ease) both; }
 
 /* View transitions between pages: old page drifts out, new one settles in; covers fly between library and project. */
-::view-transition-old(root) { animation: 0.22s var(--ease) both sink; }
-::view-transition-new(root) { animation: 0.38s var(--ease) both rise; }
-::view-transition-group(*) { animation-duration: 0.42s; animation-timing-function: var(--ease); }
+::view-transition-old(root) { animation: 0.08s linear both fade reverse; }
+::view-transition-new(root) { animation: 0.14s var(--ease) both fade; }
+::view-transition-group(*) { animation-duration: 0.24s; animation-timing-function: var(--ease); }
 .cover-shared { display: block; }
 
 /* Tactile controls */
@@ -668,8 +660,13 @@ textarea.input, .comment-form textarea { min-height: 0; padding: var(--s-3) var(
 .msg-list { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; padding: var(--s-4) 0; display: flex; flex-direction: column; gap: 2px; }
 .msg-more { align-self: center; margin-bottom: var(--s-3); }
 .msg-empty { margin: auto; color: var(--muted); text-align: center; }
-.msg { position: relative; max-width: min(78%, 620px); align-self: flex-start; padding: 2px 36px 2px 0; }
-.msg.mine { align-self: flex-end; text-align: right; padding: 2px 0 2px 36px; }
+.msg { position: relative; max-width: min(78%, 620px); align-self: flex-start; padding: 2px 0; border-radius: 14px; -webkit-touch-callout: none; transition: opacity 0.15s var(--ease), transform 0.15s var(--ease); }
+.msg:focus-visible { outline-offset: 4px; }
+.msg.pending { opacity: 0.6; }
+.msg.held { transform: scale(0.985); }
+.msg.held .msg-text { box-shadow: 0 0 0 2px var(--line-strong); }
+@media (pointer: coarse) { .msg { -webkit-user-select: none; user-select: none; } }
+.msg.mine { align-self: flex-end; text-align: right; }
 .msg:not(.grouped) { margin-top: var(--s-3); }
 .msg-head { display: flex; gap: var(--s-2); align-items: baseline; }
 .msg.mine .msg-head { justify-content: flex-end; }
@@ -686,10 +683,6 @@ textarea.input, .comment-form textarea { min-height: 0; padding: var(--s-3) var(
 .msg.mine .msg-reactions { justify-content: flex-end; }
 .reaction { display: inline-flex; align-items: center; gap: 4px; min-height: 28px; padding: 0 8px; border-radius: 999px; border: 1px solid var(--line-strong); background: transparent; color: var(--text-2); font: 500 var(--fs-xs) var(--font-ui); cursor: pointer; }
 .reaction[aria-pressed="true"] { background: var(--text); color: var(--void); border-color: var(--text); }
-.msg-tools { position: absolute; top: 2px; right: 0; opacity: 0; transition: opacity 0.15s var(--ease); }
-.msg.mine .msg-tools { right: auto; left: 0; }
-.msg:hover .msg-tools, .msg:focus-within .msg-tools { opacity: 1; }
-.msg-tools .icon-btn { width: 32px; height: 32px; }
 .msg-seen { align-self: flex-end; margin-top: 4px; }
 .typing { min-height: 1.4em; margin: 0; padding-top: 2px; }
 .composer { border-top: 1px solid var(--line); padding-top: var(--s-3); }
@@ -700,7 +693,6 @@ textarea.input, .comment-form textarea { min-height: 0; padding: var(--s-3) var(
 .gif-btn span { font: 600 11px/1 var(--font-mono); letter-spacing: 0.02em; }
 .people-chat { align-items: center; margin-bottom: var(--s-5); }
 
-@media (hover: none) { .msg-tools { opacity: 0.45; } }
 @media (max-width: 1023px) {
   .messages { grid-template-columns: minmax(0, 1fr); height: calc(100dvh - var(--chrome-bottom, 0px) - 64px - env(safe-area-inset-top) - var(--s-6) - var(--s-4)); }
   .messages.has-thread .conv-pane { display: none; }
@@ -798,3 +790,42 @@ kbd { display: inline-block; min-width: 1.8em; padding: 1px 6px; margin-right: 4
 .recovery-codes { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 12ch)); gap: 4px var(--s-5); }
 .upload-target { border: 0; padding: var(--s-3) 0 0; margin: 0; display: flex; flex-wrap: wrap; gap: var(--s-2) var(--s-5); }
 .upload-target legend { margin-bottom: var(--s-2); }
+
+/* ---------- press feedback: every tap answers at once ---------- */
+.btn:active:not(:disabled), .icon-btn:active:not(:disabled), .filter:active, .nav-link:active { transform: scale(0.96); }
+.btn, .icon-btn, .filter, .nav-link { transition-duration: 0.12s; }
+.sleeve:active .cover-shared, .recent-item:active, .conv:active, .track-row:active { opacity: 0.8; }
+
+/* ---------- context menu (right click / press and hold) ---------- */
+.ctx { position: fixed; inset: 0; z-index: 60; }
+.ctx-backdrop { position: absolute; inset: 0; }
+.ctx-menu { position: fixed; left: var(--x); top: var(--y); right: auto; min-width: 220px; animation: pop 0.12s var(--ease) both; }
+.ctx-menu.unarmed { pointer-events: none; }
+.ctx-reactions { display: flex; gap: 2px; padding: 2px 2px var(--s-1); margin-bottom: var(--s-1); border-bottom: 1px solid var(--line); }
+.menu-list .ctx-reaction { display: grid; place-items: center; flex: 1; min-width: 36px; min-height: 40px; padding: 0; border-radius: 10px; color: var(--text-2); }
+.menu-list .ctx-reaction svg { width: 20px; height: 20px; }
+.menu-list .ctx-reaction[aria-pressed="true"] { background: var(--text); color: var(--void); }
+@media (max-width: 720px) {
+  .ctx-backdrop { background: rgb(4 4 6 / 0.5); animation: fade 0.12s linear both; }
+  .ctx-menu { left: var(--s-3); right: var(--s-3); top: auto; bottom: calc(env(safe-area-inset-bottom) + var(--s-3)); min-width: 0; animation: sheet-in 0.16s var(--ease) both; }
+  .menu-list .ctx-reaction { min-height: 48px; }
+}
+
+/* ---------- installed app on a phone: an app frame, not a web page ---------- */
+/* Only the content pane scrolls. The page itself never moves, so the bars cannot be dragged or bounced,
+   and nothing slides under the status bar (iOS dims and blurs whatever scrolls beneath it). */
+@media (max-width: 1023px) {
+  html.standalone, html.standalone body { height: 100%; overflow: hidden; overscroll-behavior: none; }
+  html.standalone body { position: fixed; top: 0; left: 0; right: 0; height: var(--app-h, 100%); }
+  /* While typing, the tab bar and player would sit behind the keyboard: put them away so the page can use the room. */
+  html.standalone.keyboard .tabbar, html.standalone.keyboard .player { display: none; }
+  html.standalone #root { height: 100%; overflow-y: auto; overscroll-behavior-y: contain; -webkit-overflow-scrolling: touch; }
+  html.standalone .shell { height: 100%; min-height: 0; overflow: hidden; }
+  html.standalone .shell-main { height: 100%; min-height: 0; display: flex; flex-direction: column; }
+  html.standalone .mobile-bar { position: static; flex: none; }
+  html.standalone .content { flex: 1; min-height: 0; width: 100%; overflow-y: auto; overscroll-behavior-y: contain; -webkit-overflow-scrolling: touch; }
+  html.standalone .auth, html.standalone .public-page, html.standalone .loading { min-height: 100%; }
+  /* Messages fill the pane exactly (and shrink with the keyboard); the thread scrolls inside. */
+  html.standalone .content:has(.messages) { overflow: hidden; }
+  html.standalone .messages { height: 100%; min-height: 0; }
+}

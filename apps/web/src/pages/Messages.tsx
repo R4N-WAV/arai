@@ -2,6 +2,7 @@ import type { Capabilities, Reaction, RealtimeEvent } from '@arai/shared';
 import { REACTIONS } from '@arai/shared';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent, type ReactElement } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
+import { ContextMenu, useContextTrigger, type MenuPoint } from '../components/ContextMenu';
 import { Menu } from '../components/Menu';
 import { Modal } from '../components/Modal';
 import { Avatar } from '../components/ProfileView';
@@ -9,6 +10,7 @@ import { ReportDialog } from '../components/ReportDialog';
 import { Notice } from '../components/Unavailable';
 import { api, errorMessage } from '../lib/api';
 import { lookupUser } from '../lib/collab';
+import { memoryCache } from '../lib/cache';
 import { useResume } from '../lib/live';
 import {
   addToGroup,
@@ -20,6 +22,7 @@ import {
   loadMessages,
   react,
   rotateGroup,
+  newMessageId,
   sendMessage,
   startConversation,
   uploadAttachment,
@@ -150,13 +153,22 @@ function Attachment({ a }: { a: NonNullable<NonNullable<Message['body']>['attach
   );
 }
 
+// What was on screen last time, so opening Messages or a thread again is instant (refreshed underneath).
+const threadCache = memoryCache<string, { items: Message[]; more: boolean }>();
+const listCache = memoryCache<string, Conversation[]>();
+
 function Thread({ c, onChanged }: { c: Conversation; onChanged: () => void }) {
   const { user, keys } = useSession();
   const realtime = useRealtime();
   const nav = useNavigate();
   const title = useConversationTitle()(c);
-  const [items, setItems] = useState<Message[] | null>(null);
-  const [more, setMore] = useState(false);
+  const [items, setItems] = useState<Message[] | null>(() => threadCache.get(c.id)?.items ?? null);
+  const [more, setMore] = useState(() => threadCache.get(c.id)?.more ?? false);
+  const [menu, setMenu] = useState<{ m: Message; at: MenuPoint } | null>(null);
+  const bindMenu = useContextTrigger<Message>((m, at) => setMenu({ m, at }));
+  useEffect(() => {
+    if (items) threadCache.set(c.id, { items: items.filter((m) => !m.pending), more });
+  }, [items, more, c.id]);
   const [text, setText] = useState('');
   const [replyTo, setReplyTo] = useState<Message | null>(null);
   const [editing, setEditing] = useState<Message | null>(null);
@@ -184,7 +196,8 @@ function Thread({ c, onChanged }: { c: Conversation; onChanged: () => void }) {
     const cur = cRef.current;
     try {
       const r = await loadMessages(cur);
-      setItems(r.messages);
+      // Keep anything still being sent in place.
+      setItems((prev) => [...r.messages, ...(prev ?? []).filter((m) => m.pending && !r.messages.some((x) => x.id === m.id))]);
       setMore(r.more);
       if (cur.myStatus === 'active') void api('POST', `/conversations/${cur.id}/read`).then(() => rtRef.current.refreshUnread());
     } catch (e) {
@@ -192,7 +205,7 @@ function Thread({ c, onChanged }: { c: Conversation; onChanged: () => void }) {
     }
   }, []);
   useEffect(() => {
-    setItems(null);
+    setItems(threadCache.get(c.id)?.items ?? null);
     void load();
   }, [load, c.id, c.keyVersion, c.myStatus]);
   // Messages sent while this tab was asleep or offline never arrived as events: fetch them on return.
@@ -242,18 +255,30 @@ function Thread({ c, onChanged }: { c: Conversation; onChanged: () => void }) {
     e?.preventDefault();
     const t = text.trim();
     if (!t || busy) return;
-    setBusy(true);
     setError(null);
+    if (!editing) {
+      // Show it straight away; it is encrypted and sent underneath, and taken back if that fails.
+      const id = newMessageId();
+      const reply = replyTo?.id ?? null;
+      stick.current = true;
+      setItems((prev) => [...(prev ?? []), { id, conversationId: c.id, senderId: user?.id ?? '', body: { text: t }, deleted: false, replyTo: reply, createdAt: Date.now(), editedAt: null, reactions: [], pending: true }]);
+      setText('');
+      setReplyTo(null);
+      sendMessage(c, { text: t }, reply, id)
+        .then((m) => setItems((prev) => (prev ?? []).map((x) => (x.id === id ? m : x))))
+        .catch((err) => {
+          setItems((prev) => (prev ?? []).filter((x) => x.id !== id));
+          setText((cur) => cur || t);
+          setError(errorMessage(err));
+        });
+      return;
+    }
+    setBusy(true);
     try {
       if (editing) {
         const m = await editMessage(c, editing, t);
         setItems((prev) => (prev ?? []).map((x) => (x.id === m.id ? m : x)));
         setEditing(null);
-      } else {
-        const m = await sendMessage(c, { text: t }, replyTo?.id ?? null);
-        stick.current = true;
-        setItems((prev) => ((prev ?? []).some((x) => x.id === m.id) ? prev : [...(prev ?? []), m]));
-        setReplyTo(null);
       }
       setText('');
     } catch (err) {
@@ -299,6 +324,22 @@ function Thread({ c, onChanged }: { c: Conversation; onChanged: () => void }) {
       const next = await decodeMessage(c, res.message);
       setItems((prev) => (prev ?? []).map((x) => (x.id === next.id ? next : x)));
     }
+  };
+
+  const canAct = (m: Message) => !m.deleted && !m.pending && c.myStatus === 'active';
+  const replaceWith = async (r: { message: Parameters<typeof decodeMessage>[1] }) => {
+    const next = await decodeMessage(c, r.message);
+    setItems((prev) => (prev ?? []).map((x) => (x.id === next.id ? next : x)));
+  };
+  const menuItems = (m: Message) => {
+    const mine = m.senderId === user?.id;
+    return [
+      { label: 'Reply', onSelect: () => (setReplyTo(m), document.getElementById(`compose-${c.id}`)?.focus()) },
+      ...(m.body?.text ? [{ label: 'Copy text', onSelect: () => void navigator.clipboard?.writeText(m.body!.text).catch(() => undefined) }] : []),
+      ...(mine && m.body ? [{ label: 'Edit', onSelect: () => (setEditing(m), setText(m.body!.text), document.getElementById(`compose-${c.id}`)?.focus()) }] : []),
+      ...(mine ? [{ label: 'Delete for everyone', onSelect: () => void deleteMessage(m).then(replaceWith).catch((e) => setError(errorMessage(e))), danger: true }] : []),
+      ...(!mine ? [{ label: 'Report…', onSelect: () => setReport(m) }] : []),
+    ];
   };
 
   const typingNames = Object.entries(typing).filter(([id, at]) => at && id !== user?.id && Date.now() - at < 4000).map(([id]) => nameOf(id));
@@ -364,7 +405,12 @@ function Thread({ c, onChanged }: { c: Conversation; onChanged: () => void }) {
             const grouped = i > 0 && items[i - 1]!.senderId === m.senderId && m.createdAt - items[i - 1]!.createdAt < 5 * 60_000;
             const parent = m.replyTo ? items.find((x) => x.id === m.replyTo) : null;
             return (
-              <article key={m.id} className={`msg${mine ? ' mine' : ''}${grouped ? ' grouped' : ''}`} aria-label={`${nameOf(m.senderId)}, ${time(m.createdAt)}`}>
+              <article
+                key={m.id}
+                className={`msg${mine ? ' mine' : ''}${grouped ? ' grouped' : ''}${m.pending ? ' pending' : ''}${menu?.m.id === m.id ? ' held' : ''}`}
+                aria-label={`${nameOf(m.senderId)}, ${time(m.createdAt)}${canAct(m) ? '. Press Enter for options' : ''}`}
+                {...(canAct(m) ? { tabIndex: 0, 'aria-haspopup': 'menu' as const, ...bindMenu(m) } : {})}
+              >
                 {!grouped && (
                   <header className="msg-head">
                     <span className="msg-author">{nameOf(m.senderId)}</span>
@@ -389,20 +435,6 @@ function Thread({ c, onChanged }: { c: Conversation; onChanged: () => void }) {
                     ))}
                   </div>
                 )}
-                {!m.deleted && c.myStatus === 'active' && (
-                  <div className="msg-tools">
-                    <Menu
-                      label={`Message options (${nameOf(m.senderId)}, ${time(m.createdAt)})`}
-                      items={[
-                        { label: 'Reply', onSelect: () => setReplyTo(m) },
-                        ...REACTIONS.map((r) => ({ label: `React: ${REACTION_LABEL[r]}`, onSelect: () => void toggleReaction(m, r) })),
-                        ...(mine && m.body ? [{ label: 'Edit', onSelect: () => (setEditing(m), setText(m.body!.text)) }] : []),
-                        ...(mine ? [{ label: 'Delete for everyone', onSelect: () => void deleteMessage(m).then(async (r) => { const next = await decodeMessage(c, r.message); setItems((prev) => (prev ?? []).map((x) => (x.id === next.id ? next : x))); }), danger: true }] : []),
-                        ...(!mine ? [{ label: 'Report…', onSelect: () => setReport(m) }] : []),
-                      ]}
-                    />
-                  </div>
-                )}
               </article>
             );
           })
@@ -425,14 +457,33 @@ function Thread({ c, onChanged }: { c: Conversation; onChanged: () => void }) {
               <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="m20 11.5-8 8a5 5 0 0 1-7-7l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7L9.7 17.2a1.7 1.7 0 0 1-2.4-2.4L15 7" /></svg>
             </button>
             <input ref={file} type="file" multiple hidden onChange={(e) => void attach(e.target.files)} />
-            <button type="button" className="icon-btn gif-btn" disabled={!caps?.gifs} aria-label={caps?.gifs ? 'GIFs' : 'GIFs are not available yet'} title={caps?.gifs ? 'GIFs' : 'GIFs need a GIF provider, not set up yet'}>
-              <span aria-hidden="true">GIF</span>
-            </button>
+            {caps?.gifs && (
+              <button type="button" className="icon-btn gif-btn" aria-label="GIFs">
+                <span aria-hidden="true">GIF</span>
+              </button>
+            )}
             <label className="visually-hidden" htmlFor={`compose-${c.id}`}>Message</label>
             <textarea id={`compose-${c.id}`} className="composer-input" rows={1} value={text} onChange={(e) => onType(e.target.value)} onKeyDown={onKey} placeholder={progress !== null ? `Encrypting and uploading… ${Math.round(progress * 100)}%` : 'Message'} maxLength={8000} />
             <button type="submit" className="btn btn-primary btn-sm" disabled={busy || !text.trim()}>{editing ? 'Save' : 'Send'}</button>
           </div>
         </form>
+      )}
+      {menu && (
+        <ContextMenu
+          at={menu.at}
+          label={`Message from ${nameOf(menu.m.senderId)}, ${time(menu.m.createdAt)}`}
+          items={menuItems(menu.m)}
+          onClose={() => setMenu(null)}
+          header={
+            <div className="ctx-reactions" role="group" aria-label="React">
+              {REACTIONS.map((r) => (
+                <button key={r} type="button" className="ctx-reaction" aria-label={REACTION_LABEL[r]} aria-pressed={!!menu.m.reactions.find((x) => x.reaction === r)?.userIds.includes(user?.id ?? '')} onClick={() => { const m = menu.m; setMenu(null); void toggleReaction(m, r); }}>
+                  <ReactionIcon r={r} />
+                </button>
+              ))}
+            </div>
+          }
+        />
       )}
       {report && <ReportDialog open onClose={() => setReport(null)} targetType="message" targetId={report.id} label="this message" evidence={report.body?.text ?? ''} />}
       <Modal open={addOpen} onClose={() => setAddOpen(false)} title="Add someone">
@@ -470,7 +521,8 @@ export function Messages() {
   const { user, keys } = useSession();
   const realtime = useRealtime();
   const titleOf = useConversationTitle();
-  const [list, setList] = useState<Conversation[] | null>(null);
+  const [list, setListState] = useState<Conversation[] | null>(() => listCache.get(user?.id ?? '') ?? null);
+  const setList = useCallback((l: Conversation[]) => (listCache.set(user?.id ?? '', l), setListState(l)), [user?.id]);
   const [tab, setTab] = useState<'inbox' | 'requests'>('inbox');
   const [newOpen, setNewOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -485,7 +537,7 @@ export function Messages() {
     } catch (e) {
       setError(errorMessage(e));
     }
-  }, [keys, user, realtime]);
+  }, [keys, user, realtime, setList]);
   useEffect(() => {
     void load();
   }, [load]);

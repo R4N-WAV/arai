@@ -19,6 +19,7 @@ import {
 } from '@arai/crypto';
 import { MAX_FILE_BYTES, type TrackDto, type TrackVersionDto } from '@arai/shared';
 import { api, ApiError } from './api';
+import { memoryCache } from './cache';
 import { analyse, sniff, type AudioFormat } from './audio';
 import { aiffToWav, browserPlaysAiff } from './aiff';
 import { cloudCtx, deleteRemote, uploadEncrypted, uploadTarget } from './cloud';
@@ -114,10 +115,30 @@ export async function fileKeyOf(project: { id: string }, v: TrackVersion): Promi
   return open(key, await fromBase64Url(v.file.encFileKey), fileKeyCtx(v.file.id));
 }
 
-export async function loadTracks(project: Project): Promise<Track[]> {
+const trackCache = memoryCache<string, Track[]>();
+const loading = new Map<string, Promise<Track[]>>();
+/** The tracks as last loaded in this tab (shown at once while a fresh copy is fetched). */
+export const cachedTracks = (projectId: string): Track[] | null => trackCache.get(projectId) ?? null;
+
+export function loadTracks(project: Project): Promise<Track[]> {
   needKey(project);
-  const { tracks } = await api<{ tracks: TrackDto[] }>('GET', `/projects/${project.id}/tracks`);
-  return Promise.all(tracks.map((t) => decodeTrack(t, project.id)));
+  // One request at a time per project: a page opening while a prefetch is under way shares it.
+  let job = loading.get(project.id);
+  if (!job) {
+    job = (async () => {
+      const { tracks } = await api<{ tracks: TrackDto[] }>('GET', `/projects/${project.id}/tracks`);
+      const list = await Promise.all(tracks.map((t) => decodeTrack(t, project.id)));
+      trackCache.set(project.id, list);
+      return list;
+    })().finally(() => loading.delete(project.id));
+    loading.set(project.id, job);
+  }
+  return job;
+}
+
+/** Start loading a project's tracks before its page opens (called when a finger or pointer lands on it). */
+export function warmTracks(project: Project): void {
+  if (project.meta && !trackCache.has(project.id)) void loadTracks(project).catch(() => undefined);
 }
 
 export async function renameTrack(project: Project, track: Track, title: string, trims: Record<string, Trim> = track.trims): Promise<Track> {
@@ -205,6 +226,8 @@ export class UploadJob {
     readonly existingTrack: Track | null = null,
     readonly notes = '',
     readonly title: string | null = null,
+    /** Files dropped together upload side by side, but their tracks are created in the order they were chosen. */
+    readonly after: Promise<unknown> | null = null,
   ) {}
 
   get name() {
@@ -321,6 +344,8 @@ export class UploadJob {
       }
       const versionId = newId();
       const encMeta = await toBase64Url(await sealJson(key, this.meta, versionCtx(versionId)));
+      if (this.after) await this.after.catch(() => undefined);
+      if (signal.aborted) return null;
       let dto: TrackDto;
       if (this.existingTrack) {
         dto = (await api<{ track: TrackDto }>('POST', `/tracks/${this.existingTrack.id}/versions`, { id: versionId, fileId, encMeta, keyVersion: this.project.keyVersion })).track;

@@ -6,6 +6,7 @@ import type { UnlockInfo } from './account';
 import { forgetStreams } from './stream';
 import { cloudCtx } from './cloud';
 import { forgetAllTabs, rememberForTab, restoreForTab } from './tabvault';
+import { clearMemoryCaches } from './cache';
 
 interface SessionState {
   loading: boolean;
@@ -44,6 +45,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       setUnlockInfo(null);
       setKeysState(null);
       if (e instanceof ApiError && e.status === 401) void forgetAllTabs();
+      clearMemoryCaches();
     }
   }, []);
 
@@ -75,6 +77,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       await api('POST', '/auth/logout').catch(() => undefined);
       await forgetAllTabs();
       await forgetStreams();
+      clearMemoryCaches();
       setUser(null);
       setUnlockInfo(null);
       setKeysState(null);

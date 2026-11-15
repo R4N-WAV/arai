@@ -160,6 +160,11 @@ export function Settings() {
       <OfflineSection />
       <BlockedSection />
       <AdminLink />
+      <section className="section" aria-labelledby="out-h">
+        <h2 id="out-h">Sign out</h2>
+        <p className="section-lede">Signs this device out and forgets its keys. Your music stays in your account.</p>
+        <button type="button" className="btn btn-sm" onClick={() => void signOut()}>Sign out of Arai</button>
+      </section>
       <section className="section" aria-labelledby="about-h">
         <h2 id="about-h">About</h2>
         <p className="settings-links">

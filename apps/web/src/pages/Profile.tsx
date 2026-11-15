@@ -4,19 +4,22 @@ import { Link, useParams } from 'react-router';
 import { HomeLink } from '../components/Logo';
 import { ProfileView } from '../components/ProfileView';
 import { api, ApiError } from '../lib/api';
+import { memoryCache } from '../lib/cache';
+
+const profiles = memoryCache<string, ProfileDto>();
 import { useSession } from '../lib/session';
 
 export function ProfilePage() {
   const { username } = useParams();
   const { user } = useSession();
-  const [profile, setProfile] = useState<ProfileDto | null>(null);
+  const [profile, setProfile] = useState<ProfileDto | null>(() => profiles.get(username ?? '') ?? null);
   const [missing, setMissing] = useState(false);
 
   useEffect(() => {
-    setProfile(null);
+    setProfile(profiles.get(username ?? '') ?? null);
     setMissing(false);
     api<{ profile: ProfileDto }>('GET', `/profiles/${encodeURIComponent(username ?? '')}`)
-      .then((r) => setProfile(r.profile))
+      .then((r) => (profiles.set(username ?? '', r.profile), setProfile(r.profile)))
       .catch((e) => (e instanceof ApiError && e.status === 404 ? setMissing(true) : setMissing(true)));
   }, [username]);
 

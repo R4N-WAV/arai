@@ -6,16 +6,20 @@ import { publicArtUrl } from '../lib/art';
 import { Avatar } from '../components/ProfileView';
 import { Notice } from '../components/Unavailable';
 import { api, errorMessage } from '../lib/api';
+import { memoryCache } from '../lib/cache';
+
+type Results = { projects: DiscoverProjectDto[]; people: PersonDto[] };
+const results = memoryCache<string, Results>();
 
 export function Discover() {
   const [q, setQ] = useState('');
-  const [res, setRes] = useState<{ projects: DiscoverProjectDto[]; people: PersonDto[] } | null>(null);
+  const [res, setRes] = useState<Results | null>(() => results.get('') ?? null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const t = setTimeout(() => {
       api<{ projects: DiscoverProjectDto[]; people: PersonDto[] }>('GET', `/discover?q=${encodeURIComponent(q.trim())}`)
-        .then((r) => (setRes(r), setError(null)))
+        .then((r) => (results.set(q.trim(), r), setRes(r), setError(null)))
         .catch((e) => setError(errorMessage(e)));
     }, q ? 250 : 0);
     return () => clearTimeout(t);

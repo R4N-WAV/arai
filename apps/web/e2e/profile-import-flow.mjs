@@ -119,16 +119,16 @@ if (shots) await visitor.screenshot({ path: `${shots}/pi2-visitor-mobile.png`, f
 step('signed-out visitor sees the public profile (phone layout)');
 
 // import from a downloaded folder
-await page.goto(`${BASE}/import`);
-await page.getByRole('heading', { name: 'Import' }).waitFor();
+await page.goto(`${BASE}/upload`);
+await page.getByRole('heading', { name: 'Upload', exact: true }).waitFor();
 await page.locator('input[type=file]').first().setInputFiles(exportDir);
 await page.getByRole('heading', { name: 'Here is what will be created' }).waitFor();
 await page.getByText('2 projects · 3 files').waitFor();
 await page.getByText('1 file skipped').waitFor();
 await page.getByRole('textbox', { name: 'Project name' }).last().fill('Tidal EP (demos)');
 await shot('pi3-import-review');
-await page.getByRole('button', { name: 'Import 2 projects' }).click();
-await page.getByRole('heading', { name: 'Import finished' }).waitFor({ timeout: 120000 });
+await page.getByRole('button', { name: 'Upload 2 projects' }).click();
+await page.getByRole('heading', { name: 'Upload finished' }).waitFor({ timeout: 120000 });
 await page.getByText('3 of 3 files').waitFor();
 step('folder import: 2 projects, versions grouped, notes.txt skipped, renamed before import');
 
@@ -138,11 +138,11 @@ await page.locator('.track', { hasText: 'Glass Hours' }).locator('.version-badge
 step('imported track has both versions, newest current');
 
 // import from a ZIP
-await page.goto(`${BASE}/import`);
+await page.goto(`${BASE}/upload`);
 await page.locator('input[type=file]').last().setInputFiles(zipPath);
 await page.getByText('1 project · 1 file').waitFor();
-await page.getByRole('button', { name: 'Import 1 project' }).click();
-await page.getByRole('heading', { name: 'Import finished' }).waitFor({ timeout: 60000 });
+await page.getByRole('button', { name: 'Upload 1 project' }).click();
+await page.getByRole('heading', { name: 'Upload finished' }).waitFor({ timeout: 60000 });
 await page.getByRole('link', { name: 'Go to your library' }).click();
 for (const n of ['Night Sessions', 'Tidal EP (demos)', 'Late Bloom']) await page.locator('#main').getByRole('link', { name: new RegExp(n.replace(/[()]/g, '\\$&')) }).waitFor();
 step('ZIP import works; library shows all three projects');

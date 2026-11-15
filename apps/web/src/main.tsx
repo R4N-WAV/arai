@@ -44,6 +44,34 @@ const Discover = lazy(() => import('./pages/Discover').then((m) => ({ default: m
 
 void startStreamingWorker();
 
+// Installed to the home screen: the stylesheet turns the page into a fixed app frame (see "installed app" in app.css).
+const isStandalone = () => window.matchMedia('(display-mode: standalone)').matches || (navigator as Navigator & { standalone?: boolean }).standalone === true;
+const markStandalone = () => document.documentElement.classList.toggle('standalone', isStandalone());
+markStandalone();
+window.matchMedia('(display-mode: standalone)').addEventListener?.('change', markStandalone);
+// The frame follows the visible area, so the on-screen keyboard pushes the message box up instead of covering it,
+// and iOS cannot slide the whole frame away to reveal a focused field.
+const vv = window.visualViewport;
+if (vv) {
+  const fit = () => {
+    if (!isStandalone()) return;
+    const root = document.documentElement;
+    root.style.setProperty('--app-h', `${Math.round(vv.height)}px`);
+    root.classList.toggle('keyboard', window.innerHeight - vv.height > 120);
+    if (window.scrollY !== 0) window.scrollTo(0, 0);
+  };
+  vv.addEventListener('resize', fit);
+  vv.addEventListener('scroll', fit);
+  fit();
+}
+
+// Fetch the other screens' code while the app is idle, so the first visit to each has no loading pause.
+const warm = () => {
+  for (const load of [() => import('./pages/Messages'), () => import('./pages/Settings'), () => import('./pages/Activity'), () => import('./pages/Discover'), () => import('./pages/Import'), () => import('./pages/EditProfile'), () => import('./pages/SharePage'), () => import('./pages/Info')]) void load().catch(() => undefined);
+};
+if ('requestIdleCallback' in window) requestIdleCallback(warm, { timeout: 4000 });
+else setTimeout(warm, 2500);
+
 function RequireAuth({ children }: { children: ReactNode }) {
   const { loading, user, keys } = useSession();
   if (loading) return <p className="loading" role="status">Loading…</p>;
@@ -121,7 +149,8 @@ createRoot(document.getElementById('root')!).render(
             <Route path="messages/:id" element={<Messages />} />
             <Route path="settings" element={<Settings />} />
             <Route path="profile/edit" element={<EditProfile />} />
-            <Route path="import" element={<ImportPage />} />
+            <Route path="upload" element={<ImportPage />} />
+            <Route path="import" element={<Navigate to="/upload" replace />} />
           </Route>
           <Route path="/u/:username" element={<ProfileRoute />} />
           <Route path="/s/:id" element={<SharePage />} />

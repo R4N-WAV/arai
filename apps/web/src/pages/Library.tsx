@@ -5,7 +5,7 @@ import { Notice } from '../components/Unavailable';
 import { roleWithArticle, useProjects, type Project } from '../lib/projects';
 import { useLibrary } from '../lib/library';
 import { usePlayer } from '../lib/player';
-import { loadTracks, type Track } from '../lib/tracks';
+import { loadTracks, warmTracks, type Track } from '../lib/tracks';
 import { Modal } from '../components/Modal';
 import { errorMessage } from '../lib/api';
 
@@ -67,7 +67,7 @@ export function Library() {
           <p className="voice">Start a project and its colours will begin to seep in.</p>
           <p className="form-actions" style={{ marginTop: 'var(--s-6)', justifyContent: 'center' }}>
             <Link to="/projects/new" className="btn" viewTransition>New project</Link>
-            <Link to="/import" className="btn btn-ghost">Import from other platforms</Link>
+            <Link to="/upload" className="btn btn-ghost">Upload folders or a ZIP</Link>
           </p>
         </section>
       </>
@@ -146,7 +146,7 @@ function LibraryGrid({ projects, error }: { projects: Project[]; error: string |
           <span className="voice">{count(projects.length)}</span>
         </div>
         <span className="form-actions">
-          <Link to="/import" className="btn btn-ghost">Import</Link>
+          <Link to="/upload" className="btn btn-ghost">Upload</Link>
           <Link to="/projects/new" className="btn" viewTransition>New project</Link>
         </span>
       </header>
@@ -225,7 +225,7 @@ function LibraryGrid({ projects, error }: { projects: Project[]; error: string |
             const pinned = prefs.pins.includes(p.id);
             return (
               <li key={p.id} className="sleeve-item">
-                <Link to={`/projects/${p.id}`} className="sleeve" viewTransition>
+                <Link to={`/projects/${p.id}`} className="sleeve" viewTransition onPointerDown={() => warmTracks(p)} onPointerEnter={() => warmTracks(p)} onFocus={() => warmTracks(p)}>
                   <div className="cover-shared" style={{ viewTransitionName: `cover-${p.id}` }}>
                     <ProjectCover p={p} />
                   </div>

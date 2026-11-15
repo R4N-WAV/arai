@@ -41,7 +41,7 @@ export function ImportPage() {
       const sources = await expandZips(await get(), (n) => setReading(`Unpacking ${n}…`));
       const p = buildPlan(sources);
       if (p.projects.length === 0) {
-        setError('No audio files were found. Choose the folder or ZIP you downloaded from the other platform.');
+        setError('No audio files were found. Choose a folder or ZIP that has audio in it.');
         setPhase('pick');
         return;
       }
@@ -71,7 +71,7 @@ export function ImportPage() {
       setResults([...out]);
       try {
         const color = (p.cover && (await coverColour(p.cover))) ?? COLOURS[i % COLOURS.length]!.hex;
-        r.project = await create({ name: r.name.slice(0, 120), description: 'Imported', genre: '', tags: ['imported'], color }, 'private');
+        r.project = await create({ name: r.name.slice(0, 120), description: '', genre: '', tags: [], color }, 'private');
         // The cover becomes the project's artwork (square-cropped and re-encoded here).
         if (p.cover) await prepareImage(p.cover, { w: ART_PX, h: ART_PX }, ART_BYTES).then((img) => uploadArt(r.project!, img)).catch(() => undefined);
       } catch (e) {
@@ -117,24 +117,24 @@ export function ImportPage() {
   return (
     <>
       <header className="page-header">
-        <h1>Import</h1>
-        <span className="voice">bring your library with you</span>
+        <h1>Upload</h1>
+        <span className="voice">whole folders, albums or a library at once</span>
       </header>
       {error && <Notice kind="error">{error}</Notice>}
 
       {(phase === 'pick' || phase === 'reading') && (
         <>
           <section className="section" aria-labelledby="how-h">
-            <h2 id="how-h">From other platforms</h2>
+            <h2 id="how-h">Many files at once</h2>
             <p className="muted">
-              Most music platforms do not let other apps copy your library directly, so the move happens through your own computer:
+              To add a few tracks to one project, open the project and use Add tracks. This page is for more: it turns folders into projects.
             </p>
             <ol className="steps">
-              <li><strong>Download your music</strong> from the other platform using its download or export option, project by project. Folders or ZIP files both work.</li>
-              <li><strong>Keep one folder per project</strong> if you can. Arai turns each folder (or ZIP) into a project.</li>
-              <li><strong>Choose that folder below.</strong> Files named like “Song v2”, “Song (3)” or “Song final” become versions of one track.</li>
+              <li><strong>One folder per project.</strong> Each folder (or ZIP) becomes a project, named after it.</li>
+              <li><strong>Versions are grouped.</strong> Files named like “Song v2”, “Song (3)” or “Song final” become versions of one track.</li>
+              <li><strong>Coming from another platform?</strong> Download your music there first (folders or ZIP files both work), then choose it below.</li>
             </ol>
-            <p className="row-sub">Everything is read and encrypted in this browser before it uploads. Your password for the other platform is never needed.</p>
+            <p className="row-sub">Everything is read and encrypted in this browser before it uploads.</p>
           </section>
           <div
             className={dragging ? 'dropzone dragging' : 'dropzone'}
@@ -167,12 +167,12 @@ export function ImportPage() {
             {chosen.length} project{chosen.length === 1 ? '' : 's'} · {fileCount} file{fileCount === 1 ? '' : 's'} · {formatBytes(chosenBytes)}. All private. Rename projects now or later.
           </p>
           {overQuota && storage && (
-            <Notice kind="warn">This is more than your remaining storage ({formatBytes(Math.max(0, storage.quota - storage.used))} left). Untick some projects, or the import will stop when storage runs out.</Notice>
+            <Notice kind="warn">This is more than your remaining storage ({formatBytes(Math.max(0, storage.quota - storage.used))} left). Untick some projects, or the upload will stop when storage runs out.</Notice>
           )}
           <ul className="list import-plan">
             {plan.projects.map((p) => (
               <li key={p.key} className="row">
-                <input type="checkbox" className="import-check" checked={!!include[p.key]} onChange={(e) => setInclude({ ...include, [p.key]: e.target.checked })} aria-label={`Import ${names[p.key]}`} />
+                <input type="checkbox" className="import-check" checked={!!include[p.key]} onChange={(e) => setInclude({ ...include, [p.key]: e.target.checked })} aria-label={`Upload ${names[p.key]}`} />
                 <div className="row-main">
                   <label className="visually-hidden" htmlFor={`name-${p.key}`}>Project name</label>
                   <input id={`name-${p.key}`} className="input import-name" value={names[p.key] ?? ''} maxLength={120} onChange={(e) => setNames({ ...names, [p.key]: e.target.value })} />
@@ -201,7 +201,7 @@ export function ImportPage() {
           )}
           <div className="form-actions" style={{ marginTop: 'var(--s-6)' }}>
             <button type="button" className="btn btn-primary" disabled={chosen.length === 0} onClick={() => void run()}>
-              Import {chosen.length} project{chosen.length === 1 ? '' : 's'}
+              Upload {chosen.length} project{chosen.length === 1 ? '' : 's'}
             </button>
             <button type="button" className="btn btn-ghost" onClick={() => { setPlan(null); setPhase('pick'); }}>Start over</button>
           </div>
@@ -210,11 +210,11 @@ export function ImportPage() {
 
       {(phase === 'importing' || phase === 'done') && (
         <section className="section" aria-labelledby="prog-h">
-          <h2 id="prog-h">{phase === 'done' ? 'Import finished' : 'Importing…'}</h2>
+          <h2 id="prog-h">{phase === 'done' ? 'Upload finished' : 'Uploading…'}</h2>
           <p className="section-lede" aria-live="polite">
             {progress.done} of {progress.total} files{progress.current && ` · ${progress.current}`}
           </p>
-          <progress className="import-progress" max={Math.max(1, progress.total)} value={progress.done} aria-label="Import progress" />
+          <progress className="import-progress" max={Math.max(1, progress.total)} value={progress.done} aria-label="Upload progress" />
           {phase === 'importing' && <p className="row-sub">Keep this tab open. Each file is encrypted here before it uploads.</p>}
           <ul className="list" style={{ marginTop: 'var(--s-5)' }}>
             {results.map((r) => (
@@ -222,7 +222,7 @@ export function ImportPage() {
                 <div className="row-main">
                   <div className="row-title">{r.project ? <Link to={`/projects/${r.project.id}`}>{r.name}</Link> : r.name}</div>
                   <p className="row-sub">
-                    {r.uploaded} uploaded{r.failed.length > 0 && ` · ${r.failed.length} not imported`}
+                    {r.uploaded} uploaded{r.failed.length > 0 && ` · ${r.failed.length} failed`}
                   </p>
                   {r.failed.length > 0 && (
                     <ul className="import-failed">

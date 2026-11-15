@@ -16,7 +16,7 @@ interface Step {
 const STEPS: Step[] = [
   { title: 'Welcome to அறை', body: 'Arai is a private room for your music. Everything here is encrypted on your device before it is uploaded, so only you and the people you invite can hear it.' },
   { title: 'Your library', body: 'Projects live here. As you add them, the space takes on the colours of their artwork.', target: ['.tabbar a[href="/"]', '.sidebar a[href="/"]'] },
-  { title: 'Start a project', body: 'Create a project and drop your bounces on it, or import a whole library from another platform. New versions stack up under each track.', target: ['a[href="/projects/new"]'] },
+  { title: 'Start a project', body: 'Create a project and drop your bounces on it, or upload whole folders at once from your library. New versions stack up under each track.', target: ['a[href="/projects/new"]'] },
   { title: 'Work together', body: 'Inside a project, People invites collaborators and Share makes a link for anyone. Comments pin notes to exact moments in a track.' },
   { title: 'Messages', body: 'End-to-end encrypted chats with friends, groups and every project you are in.', target: ['.tabbar a[href="/messages"]', '.sidebar a[href="/messages"]'] },
   { title: 'Activity', body: 'Invitations, comments, follows and friend requests arrive here. Turn on notifications in Settings to get them on your phone.', target: ['.mobile-bar .bell', '.sidebar a[href="/activity"]'] },

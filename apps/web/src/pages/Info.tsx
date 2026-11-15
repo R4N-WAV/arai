@@ -70,7 +70,7 @@ export function HelpPage() {
         <h2>Getting started</h2>
         <dl className="faq">
           <dt>How do I add music?</dt>
-          <dd>Create a project, then drop audio files on it (WAV, AIFF, FLAC, MP3, M4A, OGG). Or use Import to bring a whole library from another platform: folders become projects and versions are grouped by name.</dd>
+          <dd>Create a project, then drop audio files on it (WAV, AIFF, FLAC, MP3, M4A, OGG). Or use Upload in your library to add whole folders or a ZIP at once: folders become projects and versions are grouped by name.</dd>
           <dt>How do versions work?</dt>
           <dd>Open a track’s menu and choose “Upload new version”. Every version is kept; you choose which one is current. “Compare versions” plays two in sync so you can switch with A and B.</dd>
           <dt>How do I work with others?</dt>

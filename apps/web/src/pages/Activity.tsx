@@ -5,6 +5,10 @@ import { Avatar } from '../components/ProfileView';
 import { Notice } from '../components/Unavailable';
 import { describe } from '../lib/activity';
 import { api, errorMessage } from '../lib/api';
+import { memoryCache } from '../lib/cache';
+
+type Friends = { friends: PersonDto[]; incoming: PersonDto[]; outgoing: PersonDto[] };
+const seen = memoryCache<'page', { items: NotificationDto[]; friends: Friends }>();
 
 const ago = (t: number) => {
   const s = Math.round((Date.now() - t) / 1000);
@@ -15,8 +19,8 @@ const ago = (t: number) => {
 };
 
 export function Activity() {
-  const [items, setItems] = useState<NotificationDto[] | null>(null);
-  const [friends, setFriends] = useState<{ friends: PersonDto[]; incoming: PersonDto[]; outgoing: PersonDto[] } | null>(null);
+  const [items, setItems] = useState<NotificationDto[] | null>(() => seen.get('page')?.items ?? null);
+  const [friends, setFriends] = useState<Friends | null>(() => seen.get('page')?.friends ?? null);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -24,6 +28,7 @@ export function Activity() {
       const [n, f] = await Promise.all([api<{ notifications: NotificationDto[] }>('GET', '/notifications'), api<{ friends: PersonDto[]; incoming: PersonDto[]; outgoing: PersonDto[] }>('GET', '/social/me/friends')]);
       setItems(n.notifications);
       setFriends(f);
+      seen.set('page', { items: n.notifications.map((x) => ({ ...x, read: true })), friends: f });
       if (n.notifications.some((x) => !x.read)) await api('POST', '/notifications/read');
     } catch (e) {
       setError(errorMessage(e));

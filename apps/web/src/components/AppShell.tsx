@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router';
+import { Link, NavLink, Outlet, useLocation, useNavigate, useNavigationType } from 'react-router';
 import { useSession } from '../lib/session';
 import { IconBell, IconDiscover, IconLibrary, IconMessages, IconSettings } from './Icons';
 import { useUnread } from '../lib/activity';
@@ -106,6 +106,11 @@ export function AppShellWith({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playedId]);
   const location = useLocation();
+  // A new page starts at its top (going back keeps where you were).
+  const navType = useNavigationType();
+  useEffect(() => {
+    if (navType !== 'POP') window.scrollTo(0, 0);
+  }, [location.pathname, navType]);
   useBottomChrome(Boolean(item));
   const unread = useUnread(location.pathname);
   const { unread: unreadMessages } = useRealtime();
@@ -171,7 +176,7 @@ export function AppShellWith({ children }: { children: ReactNode }) {
           <button type="button" className="btn btn-ghost btn-sm" onClick={() => void signOut()}>Sign out</button>
         </div>
       </nav>
-      <div>
+      <div className="shell-main">
         <header className="mobile-bar">
           <span className="mobile-bar-left">
             {back('mobile-back')}
@@ -181,7 +186,6 @@ export function AppShellWith({ children }: { children: ReactNode }) {
             {helpBtn('icon-btn help-btn')}
             {bell('icon-btn bell')}
             <Link to={`/u/${user?.username ?? ''}`} className="mobile-avatar" aria-label="Your profile"><Avatar profile={me} size={32} /></Link>
-            <button type="button" className="btn btn-ghost btn-sm" onClick={() => void signOut()}>Sign out</button>
           </span>
         </header>
         <main id="main" className="content" tabIndex={-1} key={location.pathname}>

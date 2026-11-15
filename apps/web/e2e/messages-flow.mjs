@@ -80,12 +80,13 @@ await a.locator('.msg-seen').waitFor({ timeout: 10000 });
 step('typing indicator and “Seen” receipt work');
 
 const msg = b.locator('.msg', { hasText: 'Hey! New mix is up' });
-await msg.getByRole('button', { name: /Message options/ }).click();
-await b.getByRole('menuitem', { name: 'React: Fire' }).click();
+if ((await b.getByRole('button', { name: /Message options/ }).count()) > 0) throw new Error('messages should not carry a three-dot button');
+await msg.click({ button: 'right' }); // right click on a computer
+await b.getByRole('menu').getByRole('button', { name: 'Fire' }).click();
 await a.locator('.msg', { hasText: 'Hey! New mix is up' }).getByRole('button', { name: 'Fire, 1' }).waitFor({ timeout: 10000 });
 const mine = a.locator('.msg.mine', { hasText: 'Hey! New mix is up' });
-await mine.hover();
-await mine.getByRole('button', { name: /Message options/ }).click();
+await mine.focus(); // keyboard: Enter on a focused message opens the same menu
+await a.keyboard.press('Enter');
 await a.getByRole('menuitem', { name: 'Edit' }).click();
 await a.getByLabel('Message', { exact: true }).fill('Hey! New mix v2 is up');
 await a.getByRole('button', { name: 'Save' }).click();

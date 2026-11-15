@@ -69,6 +69,8 @@ export interface Message {
   createdAt: number;
   editedAt: number | null;
   reactions: MessageDto['reactions'];
+  /** Shown already, still on its way to the server. */
+  pending?: boolean;
 }
 
 export async function decodeMessage(c: Pick<Conversation, 'id' | 'kind' | 'projectId'>, m: MessageDto): Promise<Message> {
@@ -159,10 +161,10 @@ export async function loadMessages(c: Conversation, before?: number): Promise<{ 
   return { messages: await Promise.all(r.messages.map((m) => decodeMessage(c, m))), more: r.more };
 }
 
-export async function sendMessage(c: Conversation, body: MessageBody, replyTo: string | null = null): Promise<Message> {
+export const newMessageId = newId;
+export async function sendMessage(c: Conversation, body: MessageBody, replyTo: string | null = null, id = newId()): Promise<Message> {
   const key = conversationKey(c, c.keyVersion);
   if (!key) throw new Error('locked');
-  const id = newId();
   const { message } = await api<{ message: MessageDto }>('POST', `/conversations/${c.id}/messages`, { id, keyVersion: c.keyVersion, encBody: await toBase64Url(await sealJson(key, body, msgCtx(id))), replyTo });
   return decodeMessage(c, message);
 }
