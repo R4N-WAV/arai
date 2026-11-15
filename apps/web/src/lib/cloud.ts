@@ -192,8 +192,16 @@ export function normaliseDropboxUrl(url: string): string {
   return `https://www.dropbox.com${u.pathname}${rlkey ? `?rlkey=${rlkey}` : ''}`;
 }
 
-async function driveFolder(keys: AccountKeys, clientId: string, t: Tokens): Promise<string> {
-  if (t.folderId) return t.folderId;
+let folderJob: Promise<string> | null = null;
+/** The "Arai (encrypted)" folder, created once: several files dropped together must not each make their own. */
+function driveFolder(keys: AccountKeys, clientId: string, t: Tokens): Promise<string> {
+  const known = t.folderId ?? cache.get('gdrive')?.folderId;
+  if (known) return Promise.resolve(known);
+  folderJob ??= createDriveFolder(keys, clientId, t).finally(() => (folderJob = null));
+  return folderJob;
+}
+
+async function createDriveFolder(keys: AccountKeys, clientId: string, t: Tokens): Promise<string> {
   const res = await fetch('https://www.googleapis.com/drive/v3/files?fields=id', {
     method: 'POST',
     headers: { Authorization: `Bearer ${t.accessToken}`, 'Content-Type': 'application/json' },
@@ -224,7 +232,9 @@ async function driveUpload(keys: AccountKeys, clientId: string, t: Tokens, fileI
     const n = final ? buf.length : Math.floor(buf.length / PIECE) * PIECE;
     if (n === 0 && !final) return;
     const part = buf.subarray(0, n);
-    const res = await fetch(session, { method: 'PUT', headers: { 'Content-Range': `bytes ${sent}-${sent + n - 1}/${encSize}` }, body: part as BodyInit });
+    // When the size is an exact multiple of the piece size nothing is left for the last request: it only closes the upload.
+    const range = n === 0 ? `bytes */${encSize}` : `bytes ${sent}-${sent + n - 1}/${encSize}`;
+    const res = await fetch(session, { method: 'PUT', headers: { 'Content-Range': range }, body: part as BodyInit });
     if (final) {
       if (!res.ok) throw new Error(`drive_${res.status}`);
       id = ((await res.json()) as { id: string }).id;
