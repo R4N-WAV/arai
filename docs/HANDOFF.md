@@ -10,7 +10,7 @@
 - Provider-gated and greyed out: email (verification, email change, email invites), SMS 2FA, GIFs, and Dropbox/Google Drive storage until the apps are registered (docs/RUNBOOK.md "Optional providers").
 - Session 15 was a defect pass on sharing (see SESSION_LOG). Rule that came out of it: **an E2E test must not `reload()` to see another person's change**; that is how the missing live updates went unnoticed. Anything a second person does must reach an open tab through `announceProject` (server) and `useProjectEvents`/`useResume` (client).
 - The installed phone app uses a fixed frame (`html.standalone` in `app.css`); it has only been tested in an emulated browser, so check it on a real iPhone after any layout change. Tests emulate it with `navigator.standalone = true`.
-- The deploy workflow only deploys `main` and `claude/optimistic-dirac-f6m66e`; work on any other branch is not live until merged there.
+- The deploy workflow deploys `main`, `claude/optimistic-dirac-f6m66e` and `claude/inspiring-newton-vi1n6p` (added at the owner's request, session 15); work on any other branch is not live until merged into one of them.
 - Before every push: `npm run typecheck && npm run lint && npm test` (the deploy job runs the same and refuses to deploy on failure).
 
 ## Layout
