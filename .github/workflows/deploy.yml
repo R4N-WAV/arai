@@ -66,10 +66,39 @@ jobs:
         working-directory: apps/api
         run: npx wrangler d1 migrations apply arai --remote
 
+      # Dropbox / Google Drive storage (docs/RUNBOOK.md "Optional providers"): the public ids come from
+      # GitHub repository variables, so turning them on needs no code change. Unset = feature stays off.
       - name: Deploy Worker
         if: steps.gate.outputs.ready == 'true'
         working-directory: apps/api
-        run: npx wrangler deploy
+        env:
+          DROPBOX_APP_KEY: ${{ vars.DROPBOX_APP_KEY }}
+          GOOGLE_CLIENT_ID: ${{ vars.GOOGLE_CLIENT_ID }}
+        run: |
+          set -euo pipefail
+          args=()
+          if [ -n "${DROPBOX_APP_KEY:-}" ]; then args+=(--var "DROPBOX_APP_KEY:${DROPBOX_APP_KEY}"); echo "Dropbox storage: on"; else echo "Dropbox storage: off (no DROPBOX_APP_KEY variable)"; fi
+          if [ -n "${GOOGLE_CLIENT_ID:-}" ]; then args+=(--var "GOOGLE_CLIENT_ID:${GOOGLE_CLIENT_ID}"); echo "Google Drive client id: set"; else echo "Google Drive: off (no GOOGLE_CLIENT_ID variable)"; fi
+          npx wrangler deploy "${args[@]}"
+
+      # Google Drive's secret half: copied from GitHub secrets into Cloudflare on every deploy (never printed),
+      # so a changed secret takes effect on the next push. Missing ones are left as they are.
+      - name: Sync storage provider secrets
+        if: steps.gate.outputs.ready == 'true'
+        working-directory: apps/api
+        env:
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+        run: |
+          set -euo pipefail
+          for name in GOOGLE_CLIENT_SECRET GOOGLE_API_KEY; do
+            if [ -n "${!name:-}" ]; then
+              printf '%s' "${!name}" | npx wrangler secret put "$name" >/dev/null
+              echo "$name updated"
+            else
+              echo "$name not set in GitHub secrets (Google Drive stays off until both are)"
+            fi
+          done
 
       # Server secrets are generated inside this job the first time only and
       # stored solely in Cloudflare (never in GitHub or the repo). Existing

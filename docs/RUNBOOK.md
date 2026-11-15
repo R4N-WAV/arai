@@ -24,17 +24,31 @@ Public ids go in `apps/api/wrangler.jsonc` → `vars` (a deploy overwrites
 variables set only in the dashboard); secrets via `npx wrangler secret put NAME`
 in `apps/api`.
 
+Dropbox and Google Drive need no code change: the deploy job reads their keys from
+GitHub (repository → Settings → Secrets and variables → Actions). Add them, then push
+any commit or run the Deploy workflow by hand (Actions → Deploy → Run workflow).
+The redirect address for both is `https://arai.ranuj-s.workers.dev/storage/callback`.
+
 **Dropbox** (users store audio in their own Dropbox):
 1. https://www.dropbox.com/developers/apps → Create app → Scoped access → **App folder** → name it e.g. `Arai`.
-2. Permissions: `files.content.write`, `files.content.read`, `sharing.write`, `sharing.read` → Submit.
-3. Settings: Redirect URI `https://arai.ranuj-s.workers.dev/storage/callback`; *Allow public clients (Implicit Grant & PKCE)*: Allow.
-4. Copy the **App key** into `vars.DROPBOX_APP_KEY`. No secret is needed (PKCE). New apps allow 500 users until you apply for production.
+2. Permissions tab: tick `files.content.write`, `files.content.read`, `sharing.write`, `sharing.read` → Submit.
+3. Settings tab: add the redirect URI above; *Allow public clients (Implicit Grant & PKCE)*: Allow;
+   *Development users*: **Enable additional users** (otherwise only you can connect; up to 500 before you apply for production).
+4. Copy the **App key** → GitHub **variable** `DROPBOX_APP_KEY`. No secret is needed (PKCE).
 
 **Google Drive**:
-1. https://console.cloud.google.com → new project → enable **Google Drive API**.
-2. OAuth consent screen: External, scope `.../auth/drive.file`; add yourself as a test user (publish it to open it to everyone).
-3. Credentials → OAuth client ID → Web application → redirect URI `https://arai.ranuj-s.workers.dev/storage/callback` → put the client id in `vars.GOOGLE_CLIENT_ID`, the client secret via `wrangler secret put GOOGLE_CLIENT_SECRET`.
-4. Credentials → API key restricted to the Drive API → `wrangler secret put GOOGLE_API_KEY` (lets Arai read the shared ciphertext files).
+1. https://console.cloud.google.com → new project → APIs & Services → Library → enable **Google Drive API**.
+2. OAuth consent screen (Google Auth Platform): External; scope `.../auth/drive.file` (only files Arai creates);
+   then **Publish app**. Left in *Testing*, only listed test users can connect and their connection expires after 7 days.
+   `drive.file` is a non-sensitive scope, so publishing needs no Google review.
+3. Clients → Create client → Web application → Authorised redirect URI: the address above →
+   client ID → GitHub **variable** `GOOGLE_CLIENT_ID`; client secret → GitHub **secret** `GOOGLE_CLIENT_SECRET`.
+4. Credentials → Create API key → restrict it to the Google Drive API (no website restriction: Arai's server
+   uses it) → GitHub **secret** `GOOGLE_API_KEY`.
+Drive shows in Settings only when all three are set.
+
+After the deploy, the job log says "Dropbox storage: on" / "GOOGLE_… updated". In Arai: Settings →
+Storage → Connect, then upload a track and play it from a second account that has no cloud connected.
 
 **GIFs**: a GIF provider key as `GIF_API_KEY` + `vars.FEATURE_GIFS = "on"`.
 
